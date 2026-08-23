@@ -1,0 +1,18 @@
+import { BarChart3, ChevronLeft, Gift, GripVertical, Heart, LayoutDashboard, RotateCcw, Settings, Sparkles, X } from 'lucide-react'
+import { useLifeStore } from '../../store/useLifeStore'
+import { moduleRegistry } from '../../data/modules'
+import { translate } from '../../i18n/translations'
+import type { PageId } from '../../types'
+import { IconButton, Toggle } from '../ui/primitives'
+
+const nav = [
+  { id: 'dashboard' as PageId, icon: LayoutDashboard, key: 'dashboard' as const }, { id: 'finances' as PageId, icon: BarChart3, key: 'finances' as const }, { id: 'personal' as PageId, icon: Heart, key: 'personal' as const },
+  { id: 'features' as PageId, icon: Gift, key: 'features' as const, free: true }, { id: 'settings' as PageId, icon: Settings, key: 'settings' as const },
+]
+export function Sidebar({ page, onNavigate, mobileOpen, onClose }: { page: PageId; onNavigate: (page: PageId) => void; mobileOpen: boolean; onClose: () => void }) {
+  const settings = useLifeStore(state => state.settings); const profile = useLifeStore(state => state.profile); const visible = useLifeStore(state => state.visibleWidgets); const toggleWidget = useLifeStore(state => state.toggleWidget); const editMode = useLifeStore(state => state.editMode); const setEditMode = useLifeStore(state => state.setEditMode); const reset = useLifeStore(state => state.resetLayout)
+  const t = (key: Parameters<typeof translate>[1]) => translate(settings.language, key)
+  const en = settings.language === 'en'
+  const navigate = (id: PageId) => { onNavigate(id); onClose() }
+  return <><button className={`sidebar-scrim ${mobileOpen ? 'show' : ''}`} aria-label={en ? 'Close menu' : 'Fermer le menu'} onClick={onClose} /><aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}><div className="sidebar-brand"><img src="/assets/logo.svg" alt="LifeOS" /><div><strong>LifeOS</strong><span>{t('personalSpace')}</span></div><IconButton label={en ? 'Close' : 'Fermer'} className="sidebar-close" onClick={onClose}><X size={18} /></IconButton></div><nav className="main-nav"><span className="nav-label">{t('space')}</span>{nav.map(item => <button key={item.id} className={page === item.id ? 'active' : ''} onClick={() => navigate(item.id)} title={translate(settings.language, item.key)}><item.icon size={19} /><span>{translate(settings.language, item.key)}</span>{item.free && <em>{t('free').toUpperCase()}</em>}</button>)}</nav><div className="sidebar-divider" /><div className="edit-control"><span><GripVertical size={17} /><span><strong>{t('customize')}</strong><small>{t('moveCards')}</small></span></span><Toggle label={t('customize')} checked={editMode} onChange={setEditMode} /></div><div className="module-nav"><header><span>{t('modules')}</span><em>{Object.values(visible).filter(Boolean).length}/{moduleRegistry.length}</em></header>{moduleRegistry.map(module => { const label = en ? module.labelEn : module.label; return <div key={module.id}><button onClick={() => { navigate('dashboard'); window.setTimeout(() => document.getElementById(`widget-${module.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 250) }}><module.icon size={16} /><span>{label}</span></button><Toggle label={`${en ? 'Show' : 'Afficher'} ${label}`} checked={Boolean(visible[module.id])} onChange={() => toggleWidget(module.id)} /></div> })}</div><button className="reset-layout" onClick={reset}><RotateCcw size={15} /><span>{t('resetGrid')}</span></button><div className="sidebar-profile">{profile.avatar ? <img src={profile.avatar} alt="" /> : <span>{profile.name.split(' ').map(part => part[0]).join('').slice(0, 2)}</span>}<div><strong>{profile.name}</strong><small>{profile.email}</small></div><ChevronLeft size={15} /></div></aside></>
+}
