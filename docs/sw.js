@@ -1,8 +1,8 @@
 const CACHE_PREFIX = 'lifeos-shell-';
-const CACHE = `${CACHE_PREFIX}v3.1`;
+const CACHE = `${CACHE_PREFIX}v4.0`;
 const ROOT = new URL('./', self.location.href).pathname;
 const INDEX_URL = `${ROOT}index.html`;
-const STATIC_SHELL = [`${ROOT}assets/logo.svg`, `${ROOT}assets/favicon.svg`, `${ROOT}assets/avatar-bot.svg`, `${ROOT}manifest.webmanifest`];
+const STATIC_SHELL = [`${ROOT}assets/logo.svg`, `${ROOT}assets/favicon.svg`, `${ROOT}assets/avatar-bot.svg`, `${ROOT}assets/apple-touch-icon.png`, `${ROOT}assets/icon-192.png`, `${ROOT}assets/icon-512.png`, `${ROOT}assets/icon-maskable-512.png`, `${ROOT}manifest.webmanifest`];
 
 async function installBuildShell() {
   // Stage one complete build in its own cache. If any compiled asset is missing,

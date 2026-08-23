@@ -51,7 +51,7 @@ export interface FinanceProfile {
   employment: string
   monthlyIncome: number
   irregularIncome: number
-  incomeStability: 'stable' | 'variable' | 'uncertain'
+  incomeStability: '' | 'stable' | 'variable' | 'uncertain'
   housing: number
   food: number
   transport: number
@@ -65,8 +65,8 @@ export interface FinanceProfile {
   dependents: number
   familySupport: number
   emergencySavings: number
-  budgetFrequency: 'never' | 'sometimes' | 'monthly' | 'weekly'
-  impulseFrequency: 'rarely' | 'sometimes' | 'often'
+  budgetFrequency: '' | 'never' | 'sometimes' | 'monthly' | 'weekly'
+  impulseFrequency: '' | 'rarely' | 'sometimes' | 'often'
   moneyStress: number
   paydayBehavior: string
   priorities: string[]

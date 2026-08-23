@@ -18,15 +18,6 @@ const financeCategories: Record<string, [string, string]> = {
   Other: ['Divers', 'Other'],
 }
 
-const savingsTitles: Record<string, [string, string]> = {
-  'Fonds d’urgence': ['Fonds d’urgence', 'Emergency fund'],
-  'Emergency fund': ['Fonds d’urgence', 'Emergency fund'],
-  'Nouveau MacBook': ['Nouveau MacBook', 'New MacBook'],
-  'New MacBook': ['Nouveau MacBook', 'New MacBook'],
-  'Voyage au Japon': ['Voyage au Japon', 'Trip to Japan'],
-  'Trip to Japan': ['Voyage au Japon', 'Trip to Japan'],
-}
-
 const investmentTypes: Record<string, [string, string]> = {
   Actions: ['Actions', 'Stocks'],
   Stocks: ['Actions', 'Stocks'],
@@ -41,5 +32,5 @@ function localized(value: string, language: AppLanguage, dictionary: Record<stri
 }
 
 export const localizeFinanceCategory = (value: string, language: AppLanguage) => localized(value, language, financeCategories)
-export const localizeSavingsTitle = (value: string, language: AppLanguage) => localized(value, language, savingsTitles)
+export const localizeSavingsTitle = (value: string, _language: AppLanguage) => value
 export const localizeInvestmentType = (value: string, language: AppLanguage) => localized(value, language, investmentTypes)

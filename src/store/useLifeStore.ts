@@ -9,6 +9,7 @@ import {
 import { uid } from '../utils/core'
 import { createIndexedDbStorage } from '../utils/indexedDbStorage'
 import { createSafePersistedLifePatch } from '../utils/backupValidation'
+import { stripLegacySeedData } from './legacyMigration'
 
 type SettingsPatch = Partial<Settings>
 interface LifeStore {
@@ -26,12 +27,14 @@ interface LifeStore {
   moveWidget: (id: string, direction: 'up' | 'down') => void; applyDashboardPreset: (id: DashboardPresetId) => void
   addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void; updateTask: (id: string, patch: Partial<Task>) => void; deleteTask: (id: string) => void; setTaskStatus: (id: string, status: TaskStatus) => void; reorderTasks: (tasks: Task[]) => void
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; deleteNote: (id: string) => void
-  toggleHabit: (id: string, date: string) => void
+  addHabit: (name: string, icon: string) => void; toggleHabit: (id: string, date: string) => void; deleteHabit: (id: string) => void
   saveJournal: (date: string, mood: string, content: string) => void
-  updateGoal: (id: string, patch: Partial<Goal>) => void
+  addGoal: (goal: Omit<Goal, 'id' | 'milestones'>) => void; updateGoal: (id: string, patch: Partial<Goal>) => void; deleteGoal: (id: string) => void
   addEvent: (event: Omit<CalendarEvent, 'id'>) => void; deleteEvent: (id: string) => void
-  addTransaction: (transaction: Omit<Transaction, 'id'>) => void; updateTransaction: (id: string, patch: Partial<Transaction>) => void; deleteTransaction: (id: string) => void; updateBudget: (id: string, patch: Partial<Budget>) => void
-  contributeSavings: (id: string, amount: number) => void
+  addTransaction: (transaction: Omit<Transaction, 'id'>) => void; updateTransaction: (id: string, patch: Partial<Transaction>) => void; deleteTransaction: (id: string) => void
+  addBudget: (budget: Omit<Budget, 'id' | 'spent'>) => void; updateBudget: (id: string, patch: Partial<Budget>) => void; deleteBudget: (id: string) => void
+  addSavings: (goal: Omit<SavingsGoal, 'id'>) => void; contributeSavings: (id: string, amount: number) => void; deleteSavings: (id: string) => void
+  addInvestment: (investment: Omit<Investment, 'id'>) => void; deleteInvestment: (id: string) => void
   setChatOpen: (value: boolean) => void; setChatTyping: (value: boolean) => void; pushChat: (message: Omit<ChatMessage, 'id' | 'createdAt'>) => void; clearChat: () => void; setUnread: (value: number) => void
   updateFinanceProfile: (profile: FinanceProfile) => void; pushFinanceCoach: (message: Omit<FinanceCoachMessage, 'id' | 'createdAt'>) => void; clearFinanceCoach: () => void
   addMember: (name: string, role: string) => void; toggleIntegration: (id: string) => void; connectBank: () => void; generateApiKey: () => void
@@ -129,6 +132,7 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   addNote: () => { const id = uid('note'); set(state => ({ notes: [{ id, title: copy(state, 'Nouvelle note', 'New note'), content: '', pinned: false, tags: [], updatedAt: new Date().toISOString() }, ...state.notes] })); return id },
   updateNote: (id, patch) => set(state => ({ notes: state.notes.map(note => note.id === id ? { ...note, ...patch, updatedAt: new Date().toISOString() } : note) })),
   deleteNote: id => set(state => ({ notes: state.notes.filter(note => note.id !== id) })),
+  addHabit: (name, icon) => { set(state => ({ habits: [...state.habits, { id: uid('habit'), name, icon: icon || '○', done: {}, missed: {}, bestStreak: 0 }] })); get().pushToast({ title: copy(get(), 'Habitude ajoutée', 'Habit added'), tone: 'success' }) },
   toggleHabit: (id, date) => set(state => ({ habits: state.habits.map(habit => {
     if (habit.id !== id) return habit
     const done = { ...habit.done }; const missed = { ...habit.missed }
@@ -137,11 +141,14 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
     else delete missed[date]
     return { ...habit, done, missed }
   }) })),
+  deleteHabit: id => set(state => ({ habits: state.habits.filter(habit => habit.id !== id) })),
   saveJournal: (date, mood, content) => set(state => {
     const found = state.journal.find(entry => entry.date === date)
     return { journal: found ? state.journal.map(entry => entry.date === date ? { ...entry, mood, content } : entry) : [{ id: uid('journal'), date, mood, content, tags: [] }, ...state.journal] }
   }),
+  addGoal: goal => { set(state => ({ goals: [...state.goals, { ...goal, id: uid('goal'), milestones: [] }] })); get().pushToast({ title: copy(get(), 'Objectif ajouté', 'Goal added'), tone: 'success' }) },
   updateGoal: (id, patch) => set(state => ({ goals: state.goals.map(goal => goal.id === id ? { ...goal, ...patch } : goal) })),
+  deleteGoal: id => set(state => ({ goals: state.goals.filter(goal => goal.id !== id) })),
   addEvent: event => { set(state => ({ events: [...state.events, { ...event, id: uid('event') }] })); get().pushToast({ title: copy(get(), 'Événement ajouté', 'Event added'), tone: 'success' }) },
   deleteEvent: id => set(state => ({ events: state.events.filter(event => event.id !== id) })),
   addTransaction: transaction => {
@@ -170,8 +177,14 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
       budgets: removed?.type === 'expense' ? state.budgets.map(budget => budget.category === removed.category ? { ...budget, spent: Math.max(0, budget.spent - removed.amount) } : budget) : state.budgets,
     }
   }),
+  addBudget: budget => { set(state => ({ budgets: [...state.budgets, { ...budget, id: uid('budget'), spent: 0 }] })); get().pushToast({ title: copy(get(), 'Budget ajouté', 'Budget added'), tone: 'success' }) },
   updateBudget: (id, patch) => set(state => ({ budgets: state.budgets.map(budget => budget.id === id ? { ...budget, ...patch } : budget) })),
+  deleteBudget: id => set(state => ({ budgets: state.budgets.filter(budget => budget.id !== id) })),
+  addSavings: goal => { set(state => ({ savings: [...state.savings, { ...goal, id: uid('saving') }] })); get().pushToast({ title: copy(get(), 'Objectif d’épargne ajouté', 'Savings goal added'), tone: 'success' }) },
   contributeSavings: (id, amount) => { set(state => ({ savings: state.savings.map(goal => goal.id === id ? { ...goal, current: Math.min(goal.target, goal.current + amount) } : goal) })); get().pushToast({ title: copy(get(), 'Épargne mise à jour', 'Savings updated'), message: `+${amount}`, tone: 'success' }) },
+  deleteSavings: id => set(state => ({ savings: state.savings.filter(goal => goal.id !== id) })),
+  addInvestment: investment => { set(state => ({ investments: [...state.investments, { ...investment, id: uid('investment') }] })); get().pushToast({ title: copy(get(), 'Placement ajouté', 'Investment added'), tone: 'success' }) },
+  deleteInvestment: id => set(state => ({ investments: state.investments.filter(investment => investment.id !== id) })),
   setChatOpen: value => set({ chatOpen: value, unread: value ? 0 : get().unread }),
   setChatTyping: chatTyping => set({ chatTyping }),
   pushChat: message => set(state => ({ chat: [...state.chat, { ...message, id: uid('chat'), createdAt: new Date().toISOString() }] })),
@@ -228,8 +241,9 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   removeToast: id => set(state => ({ toasts: state.toasts.filter(toast => toast.id !== id) })),
   resetAll: () => set(freshState()),
 }), {
-  name: 'lifeos:v2:state', version: 2,
+  name: 'lifeos:v2:state', version: 3,
   storage: createIndexedDbStorage<Partial<LifeStore>>(),
+  migrate: (persisted, version) => version < 3 ? stripLegacySeedData(persisted) as Partial<LifeStore> : persisted as Partial<LifeStore>,
   partialize: state => ({
     profile: state.profile, settings: state.settings, tasks: state.tasks, notes: state.notes, habits: state.habits, journal: state.journal, goals: state.goals, events: state.events,
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,

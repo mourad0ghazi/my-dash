@@ -790,3 +790,51 @@ html:not(.smoke-enabled) .hero-smoke { display:none }
 .fatal-reset { color:var(--danger) }
 .fatal-card>small { color:var(--text-muted); font-size:9px }
 @media (max-width:560px) { .fatal-card{padding:28px 20px}.fatal-actions{width:100%;flex-direction:column}.fatal-actions .button{width:100%} }
+
+/* Honest empty states for user-owned collections and charts. */
+.empty-state { display:flex; min-height:150px; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center }
+.empty-icon { display:grid; width:46px; height:46px; margin-bottom:11px; place-items:center; border-radius:14px; color:var(--text-soft); background:var(--accent-soft) }
+.empty-state>strong { font-size:13px }
+.empty-state>p { max-width:390px; margin:5px 0 13px; color:var(--text-muted); font-size:10px; line-height:1.6 }
+.chart-wrap>.empty-state,.donut-wrap>.empty-state { height:100% }
+
+/* Installable mobile app */
+.install-banner { display:flex; align-items:center; gap:11px; max-width:760px; margin:0 auto 14px; padding:10px 10px 10px 13px; border:1px solid var(--border); border-radius:15px; background:linear-gradient(110deg,var(--accent-soft),var(--card)); box-shadow:var(--shadow-card) }
+.install-banner>span { display:grid; width:35px; height:35px; flex:0 0 35px; place-items:center; border-radius:10px; color:var(--card-solid); background:var(--accent) }
+.dark .install-banner>span { color:#161a17 }
+.install-banner>div { min-width:0; flex:1; display:flex; flex-direction:column }
+.install-banner strong { font-size:10px }.install-banner small{color:var(--text-muted);font-size:8px;line-height:1.45}.install-banner>.icon-button{width:30px;height:30px}
+.install-panel { position:relative; overflow:hidden; display:grid; grid-template-columns:88px minmax(0,1fr); gap:24px; align-items:start; padding:28px; border:1px solid var(--border); border-radius:18px; background:linear-gradient(135deg,var(--accent-faint),var(--card-solid)) }
+.install-panel::after { content:''; position:absolute; right:-80px; top:-110px; width:240px; height:240px; border:1px solid var(--border); border-radius:50%; box-shadow:0 0 0 35px color-mix(in srgb,var(--accent-soft) 55%,transparent),0 0 0 70px color-mix(in srgb,var(--accent-faint) 65%,transparent); pointer-events:none }
+.install-visual { position:relative; z-index:1; display:grid; width:88px; height:112px; place-items:center; border:5px solid var(--accent); border-radius:20px; color:var(--accent); background:var(--card-solid); box-shadow:var(--shadow-hover) }
+.install-visual::after { content:''; position:absolute; bottom:7px; width:21px; height:3px; border-radius:4px; background:var(--border-strong) }
+.install-panel.installed .install-visual { height:88px; color:var(--success); border-color:var(--success) }
+.install-panel-copy { position:relative; z-index:1 }.install-panel-copy h3,.install-panel.installed h3{margin:7px 0 7px;font-family:var(--font-display);font-size:22px;letter-spacing:-.035em}.install-panel-copy>p,.install-panel.installed p{max-width:640px;margin:0 0 18px;color:var(--text-soft);font-size:11px;line-height:1.7}
+.install-steps { display:flex; flex-direction:column; gap:8px; max-width:620px; margin:16px 0; padding:0; list-style:none }
+.install-steps li { display:flex; align-items:center; gap:10px; padding:11px 13px; border:1px solid var(--border); border-radius:11px; color:var(--text-soft); background:var(--card); font-size:10px; line-height:1.5 }.install-steps svg{flex:0 0 auto;color:var(--accent)}
+.install-note { display:block; margin-top:12px; color:var(--text-muted); font-size:8px; line-height:1.6 }
+@media (max-width:767px) {
+  .install-banner{margin-bottom:11px;padding:9px}.install-banner strong{font-size:9px}.install-banner small{max-width:180px}.install-banner .button{padding-inline:10px}
+  .install-panel{grid-template-columns:1fr;gap:17px;padding:19px}.install-visual{width:60px;height:76px;border-width:4px;border-radius:15px}.install-panel-copy h3,.install-panel.installed h3{font-size:19px}.install-panel-copy>p,.install-panel.installed p{font-size:10px}.install-panel.installed .install-visual{height:60px}
+}
+@media (display-mode:standalone) { .install-banner{display:none} }
+
+/* Phone-first interaction: comfortable tap targets, iOS-safe fields and safe-area spacing. */
+@media (max-width:767px) {
+  .app-main { padding-right:max(12px,env(safe-area-inset-right)); padding-bottom:calc(98px + env(safe-area-inset-bottom)); padding-left:max(12px,env(safe-area-inset-left)) }
+  .app-header { padding-right:max(10px,env(safe-area-inset-right)); padding-left:max(10px,env(safe-area-inset-left)) }
+  .mobile-nav { right:max(8px,env(safe-area-inset-right)); left:max(8px,env(safe-area-inset-left)) }
+  .mobile-nav button { min-height:48px; font-size:10px }
+  .button,.button-sm { min-height:44px; font-size:13px }
+  .icon-button { width:42px; height:42px; flex-basis:42px }
+  .input { height:48px; font-size:16px }
+  .textarea { height:auto; min-height:112px; font-size:16px }
+  .pin-input { font-size:20px }
+  .segmented button,.pomo-tabs button,.choice-row button,.settings-nav button,.page-tabs button,.question-steps button,.chat-suggestions button { min-height:44px }
+  .toggle { width:44px; min-width:44px; height:30px; padding:4px; flex-basis:44px }
+  .toggle span { width:22px; height:22px }
+  .toggle.is-on span { margin-left:14px }
+  .empty-state p,.install-panel-copy>p,.install-panel.installed p { font-size:12px }
+  .install-steps li { min-height:48px; font-size:12px }
+  .install-note { font-size:11px }
+}
