@@ -1,4 +1,4 @@
-export type PageId = 'dashboard' | 'finances' | 'personal' | 'features' | 'settings'
+export type PageId = 'dashboard' | 'finances' | 'finance-settings' | 'personal' | 'features' | 'settings'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type Density = 'compact' | 'comfortable' | 'spacious'
 export type DashboardPresetId = 'essential' | 'finance' | 'productivity' | 'wellbeing'
@@ -40,6 +40,51 @@ export interface Settings {
   pin: string
   journalLocked: boolean
   weatherCity: string
+  emailNotifications: boolean
+  notificationEmail: string
+  emailBudgetAlerts: boolean
+  emailReports: boolean
+  reportFrequency: 'weekly' | 'monthly' | 'quarterly'
+}
+
+export interface FinanceProfile {
+  employment: string
+  monthlyIncome: number
+  irregularIncome: number
+  incomeStability: 'stable' | 'variable' | 'uncertain'
+  housing: number
+  food: number
+  transport: number
+  utilities: number
+  healthInsurance: number
+  subscriptions: number
+  leisure: number
+  shopping: number
+  debtPayments: number
+  debtTotal: number
+  dependents: number
+  familySupport: number
+  emergencySavings: number
+  budgetFrequency: 'never' | 'sometimes' | 'monthly' | 'weekly'
+  impulseFrequency: 'rarely' | 'sometimes' | 'often'
+  moneyStress: number
+  paydayBehavior: string
+  priorities: string[]
+  primaryGoal: string
+  goalAmount: number
+  goalDeadline: string
+  dreamProject: string
+  willingToReduce: string
+  biggestObstacle: string
+  financialNote: string
+  completedAt?: string
+}
+
+export interface FinanceCoachMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  createdAt: string
 }
 
 export interface SubTask { id: string; title: string; done: boolean }

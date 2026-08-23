@@ -17,6 +17,13 @@ function useModuleCopy() {
   return { language, locale: language === 'en' ? enUS : fr, l: (french: string, english: string) => language === 'en' ? english : french }
 }
 
+function readNotePosition(id: string) {
+  try { const value = Number(localStorage.getItem(`lifeos:note-position:${id}`) ?? 0); return Number.isFinite(value) && value >= 0 ? value : 0 } catch { return 0 }
+}
+function writeNotePosition(id: string, position: number) {
+  try { localStorage.setItem(`lifeos:note-position:${id}`, String(position)) } catch { /* Note content is still persisted by Zustand. */ }
+}
+
 function AnalogClock({ date }: { date: Date }) {
   const seconds = date.getSeconds() * 6; const minutes = date.getMinutes() * 6 + seconds / 60; const hours = (date.getHours() % 12) * 30 + minutes / 12
   return <div className="analog-clock"><span className="clock-mark mark-12">12</span><span className="clock-mark mark-3">3</span><span className="clock-mark mark-6">6</span><span className="clock-mark mark-9">9</span><i className="clock-hand hour" style={{ transform: `rotate(${hours}deg)` }} /><i className="clock-hand minute" style={{ transform: `rotate(${minutes}deg)` }} /><i className="clock-hand second" style={{ transform: `rotate(${seconds}deg)` }} /><b /></div>
@@ -86,9 +93,34 @@ export function TasksWidget({ expanded = false }: { expanded?: boolean }) {
 export function NotesWidget({ expanded = false }: { expanded?: boolean }) {
   const { l, language } = useModuleCopy()
   const notes = useLifeStore(state => state.notes); const add = useLifeStore(state => state.addNote); const update = useLifeStore(state => state.updateNote); const remove = useLifeStore(state => state.deleteNote)
-  const content = <><div className="notes-grid">{notes.slice(0, expanded ? 20 : 3).map(note => <article className="note-card" key={note.id}><div className="note-top"><Input value={note.title} onChange={event => update(note.id, { title: event.target.value })} aria-label={l('Titre de la note', 'Note title')} /><IconButton label={l('Supprimer la note', 'Delete note')} onClick={() => remove(note.id)}><X size={14} /></IconButton></div><Textarea value={note.content} onChange={event => update(note.id, { content: event.target.value })} aria-label={`${l('Contenu de', 'Content of')} ${note.title}`} placeholder={l('Écrivez librement…', 'Write freely…')} /><small>{relativeDate(note.updatedAt, language)}</small></article>)}</div>{expanded && <Button variant="secondary" onClick={add}><Plus size={15} /> {l('Nouvelle note', 'New note')}</Button>}</>
-  if (expanded) return <div className="standalone-module">{content}</div>
-  return <Widget id="notes" title={l('Notes rapides', 'Quick notes')} icon={StickyNote} action={<IconButton label={l('Ajouter une note', 'Add note')} onClick={add}><Plus size={16} /></IconButton>}>{content}</Widget>
+  const [activeId, setActiveId] = useState<string | null>(null); const [draftTitle, setDraftTitle] = useState(''); const [draftContent, setDraftContent] = useState(''); const readerRef = useRef<HTMLTextAreaElement>(null); const readingPosition = useRef(0)
+  const active = notes.find(note => note.id === activeId)
+  useEffect(() => {
+    if (!active) return
+    setDraftTitle(active.title); setDraftContent(active.content)
+    readingPosition.current = readNotePosition(active.id)
+    const frame = window.requestAnimationFrame(() => { if (readerRef.current) readerRef.current.scrollTop = readingPosition.current })
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeId])
+  useEffect(() => {
+    if (!activeId || !active) return
+    const timer = window.setTimeout(() => {
+      if (draftTitle !== active.title || draftContent !== active.content) update(activeId, { title: draftTitle, content: draftContent })
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [activeId, draftTitle, draftContent, active?.title, active?.content, update])
+  const persistReader = () => {
+    if (!activeId) return
+    update(activeId, { title: draftTitle.trim() || l('Sans titre', 'Untitled'), content: draftContent })
+    writeNotePosition(activeId, readingPosition.current)
+  }
+  const closeReader = () => { persistReader(); setActiveId(null) }
+  const openNew = () => { const id = add(); setActiveId(id) }
+  const visibleNotes = expanded ? notes : notes.slice(0, 3)
+  const editorSize = draftContent.length > 4500 ? 'long' : draftContent.length > 900 ? 'medium' : 'short'
+  const content = <><div className={`notes-grid ${expanded ? 'notes-library' : ''}`}>{visibleNotes.map(note => <article className="note-card" key={note.id} onClick={() => setActiveId(note.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveId(note.id) } }} role="button" tabIndex={0} aria-label={`${l('Ouvrir la note', 'Open note')} ${note.title}`}><div className="note-top"><span className="note-card-icon"><StickyNote size={14} /></span><strong>{note.title || l('Sans titre', 'Untitled')}</strong><IconButton label={l('Supprimer la note', 'Delete note')} onClick={event => { event.stopPropagation(); if (activeId === note.id) setActiveId(null); remove(note.id) }}><X size={14} /></IconButton></div><p>{note.content || l('Note vide — cliquez pour commencer à écrire.', 'Empty note — click to start writing.')}</p><footer><small>{relativeDate(note.updatedAt, language)}</small><span>{note.content.trim() ? note.content.trim().split(/\s+/).length : 0} {l('mots', 'words')}</span></footer></article>)}</div>{expanded && <div className="notes-library-footer"><span>{notes.length} {l('notes · toutes sont affichées', 'notes · all are displayed')}</span><Button variant="secondary" onClick={openNew}><Plus size={15} /> {l('Nouvelle note', 'New note')}</Button></div>}<Modal open={Boolean(active)} onClose={closeReader} size="lg" title={l('Lecteur de note', 'Note reader')} description={l('Lecture confortable · sauvegarde automatique · reprise à votre position', 'Comfortable reading · autosave · resume at your position')}><div className={`note-reader note-reader-${editorSize}`}><div className="note-reader-heading"><Input value={draftTitle} onChange={event => setDraftTitle(event.target.value)} aria-label={l('Titre de la note', 'Note title')} placeholder={l('Titre de la note', 'Note title')} /><Badge tone="success"><Check size={11} /> {l('Auto', 'Auto')}</Badge></div><Textarea ref={readerRef} value={draftContent} onChange={event => setDraftContent(event.target.value)} onScroll={event => { readingPosition.current = event.currentTarget.scrollTop }} aria-label={l('Contenu de la note', 'Note content')} placeholder={l('Écrivez librement…', 'Write freely…')} /><footer><span>{draftContent.trim() ? draftContent.trim().split(/\s+/).length : 0} {l('mots', 'words')} · {draftContent.length} {l('caractères', 'characters')}</span><span><Check size={13} /> {l('Sauvegarde automatique', 'Autosaved')}</span><Button onClick={closeReader}>{l('Fermer et reprendre plus tard', 'Close and resume later')}</Button></footer></div></Modal></>
+  if (expanded) return <div className="standalone-module notes-standalone">{content}</div>
+  return <Widget id="notes" title={l('Notes rapides', 'Quick notes')} icon={StickyNote} action={<IconButton label={l('Ajouter une note', 'Add note')} onClick={openNew}><Plus size={16} /></IconButton>}>{content}</Widget>
 }
 
 function weekDates() { const start = startOfWeek(new Date(), { weekStartsOn: 1 }); return Array.from({ length: 7 }, (_, i) => addDays(start, i)) }

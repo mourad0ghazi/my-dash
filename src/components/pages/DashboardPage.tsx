@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { CloudSun, Flame, LayoutGrid, Pencil, Sparkles, WalletCards } from 'lucide-react'
-import { Responsive, WidthProvider, type Layout, type Layouts } from 'react-grid-layout'
+import type { Layouts } from 'react-grid-layout'
 import { format } from 'date-fns'
 import { useLifeStore } from '../../store/useLifeStore'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -10,20 +10,40 @@ import { translate } from '../../i18n/translations'
 import { fadeInUp, staggerContainer } from '../../utils/animations'
 import { Button } from '../ui/primitives'
 import { ExcelImporter } from '../import/ExcelImporter'
-import { ClockWidget, WeatherWidget, PomodoroWidget, TasksWidget, NotesWidget, HabitsWidget, JournalWidget, GoalsWidget, CalendarWidget } from '../modules/PersonalModules'
-import { BudgetWidget, ExpenseChartWidget, FinanceSummaryWidget, InvestmentsWidget, LoanCalculator, SavingsWidget, TransactionsWidget } from '../modules/FinanceModules'
+const DashboardGrid = lazy(() => import('../dashboard/DashboardGrid').then(module => ({ default: module.DashboardGrid })))
+const personalModules = () => import('../modules/PersonalModules')
+const financeModules = () => import('../modules/FinanceModules')
+const ClockWidget = lazy(() => personalModules().then(module => ({ default: module.ClockWidget })))
+const WeatherWidget = lazy(() => personalModules().then(module => ({ default: module.WeatherWidget })))
+const PomodoroWidget = lazy(() => personalModules().then(module => ({ default: module.PomodoroWidget })))
+const TasksWidget = lazy(() => personalModules().then(module => ({ default: module.TasksWidget })))
+const NotesWidget = lazy(() => personalModules().then(module => ({ default: module.NotesWidget })))
+const HabitsWidget = lazy(() => personalModules().then(module => ({ default: module.HabitsWidget })))
+const JournalWidget = lazy(() => personalModules().then(module => ({ default: module.JournalWidget })))
+const GoalsWidget = lazy(() => personalModules().then(module => ({ default: module.GoalsWidget })))
+const CalendarWidget = lazy(() => personalModules().then(module => ({ default: module.CalendarWidget })))
+const BudgetWidget = lazy(() => financeModules().then(module => ({ default: module.BudgetWidget })))
+const ExpenseChartWidget = lazy(() => financeModules().then(module => ({ default: module.ExpenseChartWidget })))
+const FinanceSummaryWidget = lazy(() => financeModules().then(module => ({ default: module.FinanceSummaryWidget })))
+const InvestmentsWidget = lazy(() => financeModules().then(module => ({ default: module.InvestmentsWidget })))
+const LoanCalculator = lazy(() => financeModules().then(module => ({ default: module.LoanCalculator })))
+const SavingsWidget = lazy(() => financeModules().then(module => ({ default: module.SavingsWidget })))
+const TransactionsWidget = lazy(() => financeModules().then(module => ({ default: module.TransactionsWidget })))
 
-const ResponsiveGrid = WidthProvider(Responsive)
 const widgets: Record<string, React.ReactNode> = {
   clock: <ClockWidget />, weather: <WeatherWidget />, pomodoro: <PomodoroWidget />, savings: <SavingsWidget />, finance: <FinanceSummaryWidget />, expenses: <ExpenseChartWidget />,
   tasks: <TasksWidget />, habits: <HabitsWidget />, calendar: <CalendarWidget />, budget: <BudgetWidget />, transactions: <TransactionsWidget />, notes: <NotesWidget />,
   goals: <GoalsWidget />, journal: <JournalWidget />, investments: <InvestmentsWidget />, loan: <LoanCalculator />,
 }
+const WidgetPlaceholder = () => <div className="dashboard-widget-placeholder" aria-hidden="true"><i /><i /><i /></div>
 
 export function DashboardPage() {
+  const [widgetsReady, setWidgetsReady] = useState(false)
   const profile = useLifeStore(state => state.profile); const settings = useLifeStore(state => state.settings); const tasks = useLifeStore(state => state.tasks); const habits = useLifeStore(state => state.habits); const transactions = useLifeStore(state => state.transactions)
   const layouts = useLifeStore(state => state.layouts); const visible = useLifeStore(state => state.visibleWidgets); const editMode = useLifeStore(state => state.editMode); const setEditMode = useLifeStore(state => state.setEditMode); const setLayouts = useLifeStore(state => state.setLayouts); const lastExcelImport = useLifeStore(state => state.lastExcelImport)
-  const mobile = useMediaQuery('(max-width: 767px)'); const now = new Date(); const t = (key: Parameters<typeof translate>[1]) => translate(settings.language, key); const greeting = now.getHours() >= 18 ? t('evening') : t('hello'); const en = settings.language === 'en'
+  const mobile = useMediaQuery('(max-width: 767px)'); const now = new Date();
+  useEffect(() => { const timer = window.setTimeout(() => setWidgetsReady(true), 120); return () => window.clearTimeout(timer) }, [])
+  const t = (key: Parameters<typeof translate>[1]) => translate(settings.language, key); const greeting = now.getHours() >= 18 ? t('evening') : t('hello'); const en = settings.language === 'en'
   const activeTasks = tasks.filter(task => task.status !== 'done').length; const bestStreak = Math.max(...habits.map(habit => habit.bestStreak), 0)
   const currentTransactions = transactions.filter(item => { const date = new Date(item.date); return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() }); const balance = currentTransactions.reduce((sum, item) => sum + (item.type === 'income' ? item.amount : -item.amount), 0)
   const widgetOrder = [...(layouts.lg ?? [])].sort((a, b) => a.y - b.y || a.x - b.x).map(item => item.i)
@@ -37,6 +57,6 @@ export function DashboardPage() {
     </motion.section>
     <div className="dashboard-toolbar"><div><h2>{t('yourDashboard')}</h2><p>{visibleIds.length} {t('modulesVisible')} · {lastExcelImport ? `${en ? 'Excel source' : 'Source Excel'} : ${lastExcelImport.fileName}` : t('deviceOnly')}</p></div><div className="dashboard-toolbar-actions"><ExcelImporter compact /><Button variant={editMode ? 'primary' : 'secondary'} onClick={() => setEditMode(!editMode)}><Pencil size={15} /> {editMode ? t('finish') : t('customize')}</Button></div></div>
     {editMode && <motion.div className="edit-banner" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}><LayoutGrid size={17} /><span><strong>{t('editActive')}</strong> — {t('editHint')}</span></motion.div>}
-    {mobile ? <div className="mobile-widget-stack">{visibleIds.map(id => <div key={id}>{widgets[id]}</div>)}</div> : <ResponsiveGrid className="dashboard-grid" layouts={responsiveLayouts} breakpoints={{ lg: 1200, md: 900, sm: 768, xs: 0 }} cols={{ lg: 12, md: 8, sm: 6, xs: 4 }} rowHeight={settings.density === 'compact' ? 54 : settings.density === 'spacious' ? 70 : 62} margin={[16, 16]} containerPadding={[0, 0]} compactType="vertical" isDraggable={editMode} isResizable={editMode} draggableHandle=".drag-handle" resizeHandles={['se']} onLayoutChange={(_layout: Layout[], all: Layouts) => setLayouts(all)} useCSSTransforms>{visibleIds.map(id => <div key={id}>{widgets[id]}</div>)}</ResponsiveGrid>}
+    {mobile ? <div className="mobile-widget-stack">{visibleIds.map(id => <div key={id}>{widgetsReady ? <Suspense fallback={<WidgetPlaceholder />}>{widgets[id]}</Suspense> : <WidgetPlaceholder />}</div>)}</div> : <Suspense fallback={<div className="dashboard-grid-loading">{visibleIds.slice(0, 6).map(id => <WidgetPlaceholder key={id} />)}</div>}><DashboardGrid layouts={responsiveLayouts} rowHeight={settings.density === 'compact' ? 54 : settings.density === 'spacious' ? 70 : 62} editMode={editMode} onLayoutChange={(_layout, all) => setLayouts(all)}>{visibleIds.map(id => <div key={id}>{widgetsReady ? <Suspense fallback={<WidgetPlaceholder />}>{widgets[id]}</Suspense> : <WidgetPlaceholder />}</div>)}</DashboardGrid></Suspense>}
   </motion.div>
 }

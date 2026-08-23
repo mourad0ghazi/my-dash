@@ -1,13 +1,13 @@
 import { create } from 'zustand'
-import { createJSONStorage, persist } from 'zustand/middleware'
-import type { Budget, CalendarEvent, ChatMessage, DashboardPresetId, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
+import { persist } from 'zustand/middleware'
+import type { Budget, CalendarEvent, ChatMessage, DashboardPresetId, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, FinanceCoachMessage, FinanceProfile, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
 import { getDashboardPreset } from '../data/dashboardPresets'
 import {
-  initialBudgets, initialChat, initialEvents, initialGoals, initialHabits, initialIntegrations, initialInvestments, initialJournal,
+  initialBudgets, initialChat, initialEvents, initialFinanceCoach, initialFinanceProfile, initialGoals, initialHabits, initialIntegrations, initialInvestments, initialJournal,
   initialLayouts, initialMembers, initialNotes, initialProfile, initialSavings, initialSettings, initialTasks, initialTransactions, initialVisible,
 } from '../data/initialData'
 import { uid } from '../utils/formatters'
-import { indexedDbStorage } from '../utils/indexedDbStorage'
+import { createIndexedDbStorage } from '../utils/indexedDbStorage'
 
 type SettingsPatch = Partial<Settings>
 interface LifeStore {
@@ -16,6 +16,7 @@ interface LifeStore {
   transactions: Transaction[]; budgets: Budget[]; savings: SavingsGoal[]; investments: Investment[]
   layouts: StoredLayouts; visibleWidgets: Record<string, boolean>; editMode: boolean
   chat: ChatMessage[]; chatOpen: boolean; chatTyping: boolean; unread: number
+  financeProfile: FinanceProfile; financeCoach: FinanceCoachMessage[]
   members: HouseholdMember[]; integrations: Integration[]; bankConnected: boolean; apiKey: string
   lastExcelImport?: ExcelImportRecord
   toasts: ToastData[]
@@ -31,6 +32,7 @@ interface LifeStore {
   addTransaction: (transaction: Omit<Transaction, 'id'>) => void; updateTransaction: (id: string, patch: Partial<Transaction>) => void; deleteTransaction: (id: string) => void; updateBudget: (id: string, patch: Partial<Budget>) => void
   contributeSavings: (id: string, amount: number) => void
   setChatOpen: (value: boolean) => void; setChatTyping: (value: boolean) => void; pushChat: (message: Omit<ChatMessage, 'id' | 'createdAt'>) => void; clearChat: () => void; setUnread: (value: number) => void
+  updateFinanceProfile: (profile: FinanceProfile) => void; pushFinanceCoach: (message: Omit<FinanceCoachMessage, 'id' | 'createdAt'>) => void; clearFinanceCoach: () => void
   addMember: (name: string, role: string) => void; toggleIntegration: (id: string) => void; connectBank: () => void; generateApiKey: () => void
   applyExcelImport: (payload: ExcelImportPayload, mode: ExcelImportMode, customizeDashboard: boolean) => void
   pushToast: (toast: Omit<ToastData, 'id'>) => void; removeToast: (id: string) => void
@@ -43,7 +45,7 @@ const freshState = () => ({
   profile: { ...initialProfile }, settings: { ...initialSettings }, tasks: [...initialTasks], notes: [...initialNotes], habits: [...initialHabits], journal: [...initialJournal], goals: [...initialGoals], events: [...initialEvents],
   transactions: [...initialTransactions], budgets: [...initialBudgets], savings: [...initialSavings], investments: [...initialInvestments],
   layouts: structuredClone(initialLayouts), visibleWidgets: { ...initialVisible }, editMode: false,
-  chat: [...initialChat], chatOpen: false, chatTyping: false, unread: 0, members: [...initialMembers], integrations: [...initialIntegrations], bankConnected: false, apiKey: '', lastExcelImport: undefined, toasts: [],
+  chat: [...initialChat], chatOpen: false, chatTyping: false, unread: 0, financeProfile: { ...initialFinanceProfile }, financeCoach: [...initialFinanceCoach], members: [...initialMembers], integrations: [...initialIntegrations], bankConnected: false, apiKey: '', lastExcelImport: undefined, toasts: [],
 })
 
 function mergeImported<T>(existing: T[], incoming: T[] | undefined, mode: ExcelImportMode, key: (item: T) => string): T[] {
@@ -174,6 +176,9 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   pushChat: message => set(state => ({ chat: [...state.chat, { ...message, id: uid('chat'), createdAt: new Date().toISOString() }] })),
   clearChat: () => set({ chat: [...initialChat] }),
   setUnread: unread => set({ unread }),
+  updateFinanceProfile: financeProfile => set({ financeProfile: { ...financeProfile, completedAt: new Date().toISOString() } }),
+  pushFinanceCoach: message => set(state => ({ financeCoach: [...state.financeCoach, { ...message, id: uid('finance-coach'), createdAt: new Date().toISOString() }] })),
+  clearFinanceCoach: () => set({ financeCoach: [...initialFinanceCoach] }),
   addMember: (name, role) => { set(state => ({ members: [...state.members, { id: uid('member'), name, role, initials: name.split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase() }] })); get().pushToast({ title: copy(get(), 'Membre ajouté', 'Member added'), tone: 'success' }) },
   toggleIntegration: id => set(state => ({ integrations: state.integrations.map(item => item.id === id ? { ...item, enabled: !item.enabled } : item) })),
   connectBank: () => { set(state => ({ bankConnected: !state.bankConnected })); get().pushToast({ title: get().bankConnected ? copy(get(), 'Compte démo connecté', 'Demo account connected') : copy(get(), 'Compte déconnecté', 'Account disconnected'), tone: 'success' }) },
@@ -223,14 +228,14 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   resetAll: () => set(freshState()),
 }), {
   name: 'lifeos:v2:state', version: 2,
-  storage: createJSONStorage(() => indexedDbStorage),
+  storage: createIndexedDbStorage<Partial<LifeStore>>(),
   partialize: state => ({
     profile: state.profile, settings: state.settings, tasks: state.tasks, notes: state.notes, habits: state.habits, journal: state.journal, goals: state.goals, events: state.events,
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,
-    editMode: state.editMode, chat: state.chat, unread: state.unread, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey, lastExcelImport: state.lastExcelImport,
+    editMode: state.editMode, chat: state.chat, unread: state.unread, financeProfile: state.financeProfile, financeCoach: state.financeCoach, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey, lastExcelImport: state.lastExcelImport,
   }),
   merge: (persisted, current) => {
     const saved = persisted as Partial<LifeStore>
-    return { ...current, ...saved, settings: { ...current.settings, ...saved.settings } }
+    return { ...current, ...saved, settings: { ...current.settings, ...saved.settings }, financeProfile: { ...current.financeProfile, ...saved.financeProfile } }
   },
 }))

@@ -1,4 +1,4 @@
-import { BarChart3, ChevronLeft, Gift, GripVertical, Heart, LayoutDashboard, RotateCcw, Settings, Sparkles, X } from 'lucide-react'
+import { BarChart3, ChevronLeft, Gift, GripVertical, Heart, LayoutDashboard, RotateCcw, Settings, SlidersHorizontal, X } from 'lucide-react'
 import { useLifeStore } from '../../store/useLifeStore'
 import { moduleRegistry } from '../../data/modules'
 import { translate } from '../../i18n/translations'
@@ -6,7 +6,7 @@ import type { PageId } from '../../types'
 import { IconButton, Toggle } from '../ui/primitives'
 
 const nav = [
-  { id: 'dashboard' as PageId, icon: LayoutDashboard, key: 'dashboard' as const }, { id: 'finances' as PageId, icon: BarChart3, key: 'finances' as const }, { id: 'personal' as PageId, icon: Heart, key: 'personal' as const },
+  { id: 'dashboard' as PageId, icon: LayoutDashboard, key: 'dashboard' as const }, { id: 'finances' as PageId, icon: BarChart3, key: 'finances' as const }, { id: 'finance-settings' as PageId, icon: SlidersHorizontal, key: 'financeSettings' as const }, { id: 'personal' as PageId, icon: Heart, key: 'personal' as const },
   { id: 'features' as PageId, icon: Gift, key: 'features' as const, free: true }, { id: 'settings' as PageId, icon: Settings, key: 'settings' as const },
 ]
 export function Sidebar({ page, onNavigate, mobileOpen, onClose }: { page: PageId; onNavigate: (page: PageId) => void; mobileOpen: boolean; onClose: () => void }) {

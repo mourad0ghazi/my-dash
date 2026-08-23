@@ -10,12 +10,15 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'zustand'],
-          motion: ['framer-motion'],
-          charts: ['recharts'],
-          grid: ['react-grid-layout', 'react-resizable'],
-          dates: ['date-fns'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined
+          const path = id.replaceAll('\\', '/')
+          if (/\/node_modules\/(react|react-dom|scheduler|zustand|use-sync-external-store|clsx|prop-types|react-is)\//.test(path)) return 'react-vendor'
+          if (/\/node_modules\/(framer-motion|motion-dom|motion-utils)\//.test(path)) return 'motion'
+          if (/\/node_modules\/(recharts|recharts-scale|react-smooth|victory-vendor|d3-|lodash|eventemitter3|react-is|tiny-invariant)\//.test(path)) return 'charts'
+          if (/\/node_modules\/(react-grid-layout|react-resizable|react-draggable)\//.test(path)) return 'grid'
+          if (path.includes('/node_modules/date-fns/')) return 'dates'
+          return undefined
         },
       },
     },

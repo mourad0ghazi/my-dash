@@ -1,6 +1,6 @@
 export const translations = {
   fr: {
-    dashboard: 'Tableau de bord', finances: 'Finances', personal: 'Vie personnelle', features: 'Fonctionnalités+', settings: 'Paramètres',
+    dashboard: 'Tableau de bord', finances: 'Finances', financeSettings: 'Paramètres de finance', personal: 'Vie personnelle', features: 'Outils gratuits', settings: 'Paramètres',
     free: 'Gratuit', search: 'Rechercher dans LifeOS…', edit: 'Personnaliser', finish: 'Terminer', hello: 'Bonjour', evening: 'Bonsoir', balance: 'Solde mensuel', tasks: 'Tâches actives', streak: 'Meilleure série',
     space: 'ESPACE', modules: 'MODULES', personalSpace: 'Votre espace personnel', customize: 'Personnaliser', moveCards: 'Déplacer les cartes', resetGrid: 'Réinitialiser la grille',
     localData: 'Données locales', allFree: 'Tout est gratuit', madeCare: 'Fait avec soin', create: 'Créer', newTask: 'Nouvelle tâche', newNote: 'Nouvelle note', newTransaction: 'Nouvelle transaction',
@@ -17,7 +17,7 @@ export const translations = {
     fullAccess: 'Accès complet', noCard: 'Aucune carte bancaire', advancedTools: 'OUTILS AVANCÉS', everythingNeeded: 'Tout ce dont vous avez besoin', clickFeature: 'Cliquez sur une fonctionnalité pour l’utiliser immédiatement.', freeTools: 'outils gratuits', open: 'Ouvrir', includedFree: 'Inclus gratuitement',
   },
   en: {
-    dashboard: 'Dashboard', finances: 'Finances', personal: 'Personal life', features: 'Features+', settings: 'Settings',
+    dashboard: 'Dashboard', finances: 'Finances', financeSettings: 'Finance settings', personal: 'Personal life', features: 'Free tools', settings: 'Settings',
     free: 'Free', search: 'Search LifeOS…', edit: 'Customize', finish: 'Done', hello: 'Hello', evening: 'Good evening', balance: 'Monthly balance', tasks: 'Active tasks', streak: 'Best streak',
     space: 'SPACE', modules: 'MODULES', personalSpace: 'Your personal space', customize: 'Customize', moveCards: 'Move cards', resetGrid: 'Reset grid',
     localData: 'Local data', allFree: 'Everything is free', madeCare: 'Made with care', create: 'Create', newTask: 'New task', newNote: 'New note', newTransaction: 'New transaction',

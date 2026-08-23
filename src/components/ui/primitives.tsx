@@ -13,7 +13,7 @@ export function IconButton({ label, className, children, ...props }: ButtonHTMLA
 }
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) { return <input className={clsx('input', className)} {...props} /> }
 export function Select({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) { return <select className={clsx('input select', className)} {...props}>{children}</select> }
-export function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea className={clsx('input textarea', className)} {...props} /> }
+export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, ...props }, ref) { return <textarea ref={ref} className={clsx('input textarea', className)} {...props} /> })
 export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivElement>) { return <div className={clsx('card', className)} {...props}>{children}</div> }
 export function Badge({ children, tone = 'neutral', className }: { children: ReactNode; tone?: 'neutral' | 'success' | 'warning' | 'danger' | 'info'; className?: string }) { return <span className={clsx('badge', `badge-${tone}`, className)}>{children}</span> }
 export function Toggle({ checked, onChange, label, disabled = false }: { checked: boolean; onChange: (value: boolean) => void; label: string; disabled?: boolean }) {

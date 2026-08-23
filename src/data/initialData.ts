@@ -1,4 +1,4 @@
-import type { Budget, CalendarEvent, ChatMessage, Goal, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, Transaction } from '../types'
+import type { Budget, CalendarEvent, ChatMessage, FinanceCoachMessage, FinanceProfile, Goal, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, Transaction } from '../types'
 import { todayISO } from '../utils/formatters'
 
 const monthISO = (offset: number, day: number) => {
@@ -13,7 +13,21 @@ export const initialSettings: Settings = {
   theme: 'light', accent: 'smoke', density: 'comfortable', language: 'fr', currency: 'MAD', dateFormat: 'DD/MM/YYYY', hour12: false,
   timezone: 'Africa/Casablanca', decimalSeparator: ',', firstDay: 1, animations: true, smoke: true, parallax: true, notifications: true,
   budgetAlerts: true, coachEnabled: true, coachFrequency: 'daily', coachTime: '09:00', hideAmounts: false, pin: '', journalLocked: false, weatherCity: 'Casablanca',
+  emailNotifications: false, notificationEmail: 'mourad@lifeos.local', emailBudgetAlerts: true, emailReports: true, reportFrequency: 'monthly',
 }
+
+export const initialFinanceProfile: FinanceProfile = {
+  employment: '', monthlyIncome: 0, irregularIncome: 0, incomeStability: 'stable', housing: 0, food: 0, transport: 0, utilities: 0,
+  healthInsurance: 0, subscriptions: 0, leisure: 0, shopping: 0, debtPayments: 0, debtTotal: 0, dependents: 0, familySupport: 0,
+  emergencySavings: 0, budgetFrequency: 'sometimes', impulseFrequency: 'sometimes', moneyStress: 5, paydayBehavior: '', priorities: [],
+  primaryGoal: '', goalAmount: 0, goalDeadline: '', dreamProject: '', willingToReduce: '', biggestObstacle: '', financialNote: '',
+}
+
+export const initialFinanceCoach: FinanceCoachMessage[] = [{
+  id: 'finance-coach-welcome', role: 'assistant', createdAt: new Date().toISOString(),
+  text: 'Bonjour ! Je suis votre coach financier LifeOS. Ici, aucun jugement et aucun jargon inutile : on regarde vos chiffres, vos priorités et la prochaine action réaliste.',
+}]
+
 export const initialTasks: Task[] = [
   { id: 'task-1', title: 'Finaliser la présentation LifeOS', status: 'doing', priority: 'high', dueDate: todayISO(1), category: 'Travail', tags: ['focus'], subtasks: [{ id: 's1', title: 'Relire les slides', done: true }, { id: 's2', title: 'Préparer la démo', done: false }], createdAt: todayISO(-3) },
   { id: 'task-2', title: 'Séance de sport · 45 min', status: 'todo', priority: 'medium', dueDate: todayISO(0), category: 'Santé', tags: ['routine'], subtasks: [], createdAt: todayISO(-2) },
