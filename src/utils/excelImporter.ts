@@ -47,6 +47,26 @@ const aliases = {
   bio: ['bio', 'biographie', 'about', 'a propos', 'à propos'],
   currency: ['devise', 'currency', 'monnaie'],
   language: ['langue', 'language'],
+  dateFormat: ['format date', 'format de date', 'date format'],
+  decimalSeparator: ['separateur decimal', 'séparateur décimal', 'decimal separator', 'decimal symbol'],
+  timezone: ['fuseau horaire', 'timezone', 'time zone'],
+  hourFormat: ['format heure', 'format de heure', 'time format', 'hour format'],
+  firstDay: ['premier jour', 'first day', 'week starts'],
+  theme: ['theme', 'thème', 'mode affichage'],
+  density: ['densite', 'densité', 'density'],
+  accent: ['accent', 'couleur accent', 'accent color'],
+  weatherCity: ['ville meteo', 'ville météo', 'weather city'],
+  hideAmounts: ['masquer montants', 'hide amounts'],
+  notifications: ['notifications', 'alertes', 'alerts'],
+  budgetAlerts: ['alertes budget', 'budget alerts'],
+  coachEnabled: ['coach', 'coach actif', 'coach enabled'],
+  coachFrequency: ['frequence coach', 'fréquence coach', 'coach frequency'],
+  coachTime: ['heure coach', 'coach time'],
+  journalLocked: ['journal protege', 'journal protégé', 'journal locked'],
+  animations: ['animations', 'animation'],
+  smoke: ['brume', 'smoke'],
+  parallax: ['parallaxe', 'parallax'],
+  pin: ['pin', 'code pin'],
 } as const
 
 type AliasKey = keyof typeof aliases
@@ -95,7 +115,13 @@ function numberValue(value: unknown): number | undefined {
   cleaned = cleaned.replace(/[()]/g, '')
   if (cleaned.includes(',') && cleaned.includes('.')) {
     cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.') ? cleaned.replace(/\./g, '').replace(',', '.') : cleaned.replace(/,/g, '')
-  } else if (cleaned.includes(',')) cleaned = cleaned.replace(',', '.')
+  } else if (cleaned.includes(',') || cleaned.includes('.')) {
+    const separator = cleaned.includes(',') ? ',' : '.'
+    const parts = cleaned.split(separator)
+    const last = parts.at(-1) ?? ''
+    const looksGrouped = last.length === 3 && parts.slice(0, -1).every((part, index) => index === 0 ? /^[-+]?\d{1,3}$/.test(part) : /^\d{3}$/.test(part)) && !/^[-+]?0$/.test(parts[0])
+    cleaned = looksGrouped ? parts.join('') : parts.length > 2 ? `${parts.slice(0, -1).join('')}.${last}` : cleaned.replace(separator, '.')
+  }
   const parsed = Number(cleaned)
   return Number.isFinite(parsed) ? (negative ? -Math.abs(parsed) : parsed) : undefined
 }
@@ -106,7 +132,7 @@ function percentValue(value: unknown): number {
   return Math.abs(parsed) <= 1 ? parsed * 100 : parsed
 }
 
-function isoDate(value: unknown, fallback = todayISO()): string {
+function isoDate(value: unknown, fallback = todayISO(), dateFormat: Settings['dateFormat'] = 'DD/MM/YYYY'): string {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
   if (typeof value === 'number' && value > 20000 && value < 100000) {
     const date = new Date(Date.UTC(1899, 11, 30) + value * 86400000)
@@ -114,13 +140,55 @@ function isoDate(value: unknown, fallback = todayISO()): string {
   }
   const raw = text(value)
   if (!raw) return fallback
-  const european = raw.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/)
-  if (european) {
-    const year = european[3].length === 2 ? `20${european[3]}` : european[3]
-    return `${year}-${european[2].padStart(2, '0')}-${european[1].padStart(2, '0')}`
+  const numeric = raw.match(/^(\d{1,4})[/.\-](\d{1,2})[/.\-](\d{1,4})$/)
+  if (numeric) {
+    let year: string; let month: string; let day: string
+    if (numeric[1].length === 4 || dateFormat === 'YYYY-MM-DD') [year, month, day] = [numeric[1], numeric[2], numeric[3]]
+    else if (dateFormat === 'MM/DD/YYYY') [month, day, year] = [numeric[1], numeric[2], numeric[3]]
+    else [day, month, year] = [numeric[1], numeric[2], numeric[3]]
+    if (year.length === 2) year = `20${year}`
+    const candidate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`
+    const parsed = new Date(`${candidate}T12:00:00Z`)
+    return Number.isNaN(parsed.getTime()) ? fallback : candidate
   }
   const date = new Date(raw)
   return Number.isNaN(date.getTime()) ? fallback : date.toISOString().slice(0, 10)
+}
+
+function detectDateFormat(rows: Row[], language: 'fr' | 'en'): Settings['dateFormat'] | undefined {
+  let sawAmbiguous = false
+  for (const value of rows.flat()) {
+    const raw = text(value)
+    if (/^\d{4}[/.\-]\d{1,2}[/.\-]\d{1,2}$/.test(raw)) return 'YYYY-MM-DD'
+    const match = raw.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-]\d{2,4}$/)
+    if (!match) continue
+    const first = Number(match[1]); const second = Number(match[2])
+    if (first > 12) return 'DD/MM/YYYY'
+    if (second > 12) return 'MM/DD/YYYY'
+    sawAmbiguous = true
+  }
+  return sawAmbiguous ? (language === 'en' ? 'MM/DD/YYYY' : 'DD/MM/YYYY') : undefined
+}
+
+function detectDecimalSeparator(rows: Row[]): ',' | '.' | undefined {
+  for (const value of rows.flat()) {
+    if (typeof value !== 'string') continue
+    const raw = value.trim().replace(/[\s\u00a0]/g, '')
+    if (/^\d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}$/.test(raw)) continue
+    if (/[-+]?\d+[,.]\d{1,4}(?:\D|$)/.test(raw)) return raw.lastIndexOf(',') > raw.lastIndexOf('.') ? ',' : '.'
+  }
+  return undefined
+}
+
+function detectCurrency(headers: string[], rows: Row[]): string | undefined {
+  const sample = [headers.join(' '), ...rows.slice(0, 100).flat().map(text)].join(' ').toUpperCase()
+  const code = sample.match(/\b(MAD|EUR|USD|GBP|CAD|CHF|AED|SAR|TND|DZD)\b/)?.[1]
+  if (code) return code
+  if (sample.includes('€')) return 'EUR'
+  if (sample.includes('£')) return 'GBP'
+  if (sample.includes('$')) return 'USD'
+  if (/(?:د\.م\.|DH|DIRHAM)/i.test(sample)) return 'MAD'
+  return undefined
 }
 
 const truthy = (value: unknown) => {
@@ -176,7 +244,7 @@ function classifySheet(sheetName: string, map: HeaderMap): ExcelDataType | undef
     if (named === 'transactions' && has(map, 'amount', 'debit', 'credit')) scores[named] = 4
     if (named === 'tasks' && has(map, 'title')) scores[named] = 4
     if (named === 'notes' && has(map, 'content', 'title')) scores[named] = 4
-    if (named === 'profile' || named === 'settings') scores[named] = 4
+    if (named === 'profile' || named === 'settings') scores[named] = 7
   }
   const ranked = Object.entries(scores).sort((a, b) => Number(b[1]) - Number(a[1])) as [ExcelDataType, number][]
   return ranked[0]?.[1] >= 4 ? ranked[0][0] : undefined
@@ -189,7 +257,7 @@ function sourceId(kind: string, file: string, sheet: string, row: number) {
   return `excel-${kind}-${(hash >>> 0).toString(36)}`
 }
 
-function parseTransactions(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Transaction[] {
+function parseTransactions(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): Transaction[] {
   return rows.flatMap((row, index) => {
     const generic = numberValue(cell(row, map, 'amount'))
     const debit = numberValue(cell(row, map, 'debit'))
@@ -198,7 +266,7 @@ function parseTransactions(rows: Row[], map: HeaderMap, file: string, sheet: str
     if (rawAmount === undefined || rawAmount === 0 || isBlankRow(row)) return []
     const title = text(cell(row, map, 'title')) || text(cell(row, map, 'category')) || `Transaction ${index + 1}`
     const inferred = safeType(cell(row, map, 'type')) ?? (credit && credit !== 0 ? 'income' : debit && debit !== 0 ? 'expense' : rawAmount < 0 ? 'expense' : safeType(title) ?? safeType(sheet) ?? 'expense')
-    return [{ id: sourceId('transaction', file, sheet, index + offset), title, amount: Math.abs(rawAmount), type: inferred, category: text(cell(row, map, 'category')) || (inferred === 'income' ? 'Revenus' : 'Divers'), date: isoDate(cell(row, map, 'date')) }]
+    return [{ id: sourceId('transaction', file, sheet, index + offset), title, amount: Math.abs(rawAmount), type: inferred, category: text(cell(row, map, 'category')) || (inferred === 'income' ? 'Revenus' : 'Divers'), date: isoDate(cell(row, map, 'date'), todayISO(), dateFormat) }]
   })
 }
 function parseBudgets(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Budget[] {
@@ -209,25 +277,25 @@ function parseBudgets(rows: Row[], map: HeaderMap, file: string, sheet: string, 
     return [{ id: sourceId('budget', file, sheet, index + offset), category, planned: Math.abs(planned), spent: Math.abs(numberValue(cell(row, map, 'spent')) ?? 0), icon: '◒' }]
   })
 }
-function parseTasks(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Task[] {
+function parseTasks(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): Task[] {
   return rows.flatMap((row, index) => {
     const title = text(cell(row, map, 'title'))
     if (!title || isBlankRow(row)) return []
-    return [{ id: sourceId('task', file, sheet, index + offset), title, status: taskStatus(cell(row, map, 'status')), priority: priority(cell(row, map, 'priority')), dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date')), category: text(cell(row, map, 'category')) || 'Personnel', tags: splitTags(cell(row, map, 'tags')), subtasks: [], createdAt: new Date().toISOString() }]
+    return [{ id: sourceId('task', file, sheet, index + offset), title, status: taskStatus(cell(row, map, 'status')), priority: priority(cell(row, map, 'priority')), dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date'), todayISO(), dateFormat), category: text(cell(row, map, 'category')) || 'Personnel', tags: splitTags(cell(row, map, 'tags')), subtasks: [], createdAt: new Date().toISOString() }]
   })
 }
-function parseGoals(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Goal[] {
+function parseGoals(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): Goal[] {
   return rows.flatMap((row, index) => {
     const title = text(cell(row, map, 'title')); const target = numberValue(cell(row, map, 'target'))
     if (!title || target === undefined || target <= 0 || isBlankRow(row)) return []
-    return [{ id: sourceId('goal', file, sheet, index + offset), title, category: text(cell(row, map, 'category')) || 'Personnel', progress: Math.max(0, numberValue(cell(row, map, 'progress')) ?? 0), target, unit: text(cell(row, map, 'unit')) || 'unités', dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date')), milestones: [] }]
+    return [{ id: sourceId('goal', file, sheet, index + offset), title, category: text(cell(row, map, 'category')) || 'Personnel', progress: Math.max(0, numberValue(cell(row, map, 'progress')) ?? 0), target, unit: text(cell(row, map, 'unit')) || 'unités', dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date'), todayISO(), dateFormat), milestones: [] }]
   })
 }
-function parseSavings(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): SavingsGoal[] {
+function parseSavings(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): SavingsGoal[] {
   return rows.flatMap((row, index) => {
     const title = text(cell(row, map, 'title')); const target = numberValue(cell(row, map, 'target'))
     if (!title || target === undefined || target <= 0 || isBlankRow(row)) return []
-    return [{ id: sourceId('saving', file, sheet, index + offset), title, current: Math.max(0, numberValue(cell(row, map, 'current')) ?? 0), target: Math.abs(target), dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date')), icon: '◈' }]
+    return [{ id: sourceId('saving', file, sheet, index + offset), title, current: Math.max(0, numberValue(cell(row, map, 'current')) ?? 0), target: Math.abs(target), dueDate: isoDate(cell(row, map, 'dueDate') ?? cell(row, map, 'date'), todayISO(), dateFormat), icon: '◈' }]
   })
 }
 function parseInvestments(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Investment[] {
@@ -237,25 +305,27 @@ function parseInvestments(rows: Row[], map: HeaderMap, file: string, sheet: stri
     return [{ id: sourceId('investment', file, sheet, index + offset), name, symbol: text(cell(row, map, 'symbol')) || name.slice(0, 5).toUpperCase(), type: text(cell(row, map, 'type')) || text(cell(row, map, 'category')) || 'Autre', value: Math.abs(value), change: percentValue(cell(row, map, 'change')) }]
   })
 }
-function parseEvents(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): CalendarEvent[] {
+function parseEvents(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): CalendarEvent[] {
   return rows.flatMap((row, index) => {
     const title = text(cell(row, map, 'title')); const dateValue = cell(row, map, 'date')
     if (!title || !dateValue || isBlankRow(row)) return []
-    const timeValue = cell(row, map, 'time'); const formattedTime = timeValue instanceof Date ? timeValue.toISOString().slice(11, 16) : text(timeValue).slice(0, 5)
-    return [{ id: sourceId('event', file, sheet, index + offset), title, date: isoDate(dateValue), time: formattedTime || '09:00', color: text(cell(row, map, 'color')) || '#66736a' }]
+    const timeValue = cell(row, map, 'time')
+    const minutes = typeof timeValue === 'number' && timeValue >= 0 && timeValue < 1 ? Math.round(timeValue * 24 * 60) : undefined
+    const formattedTime = minutes !== undefined ? `${String(Math.floor(minutes / 60) % 24).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}` : timeValue instanceof Date ? timeValue.toISOString().slice(11, 16) : text(timeValue).slice(0, 5)
+    return [{ id: sourceId('event', file, sheet, index + offset), title, date: isoDate(dateValue, todayISO(), dateFormat), time: formattedTime || '09:00', color: text(cell(row, map, 'color')) || '#66736a' }]
   })
 }
-function parseNotes(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Note[] {
+function parseNotes(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): Note[] {
   return rows.flatMap((row, index) => {
     const content = text(cell(row, map, 'content')); const title = text(cell(row, map, 'title')) || `Note ${index + 1}`
     if ((!content && !text(cell(row, map, 'title'))) || isBlankRow(row)) return []
-    return [{ id: sourceId('note', file, sheet, index + offset), title, content, pinned: false, tags: splitTags(cell(row, map, 'tags')), updatedAt: `${isoDate(cell(row, map, 'updated'))}T12:00:00.000Z` }]
+    return [{ id: sourceId('note', file, sheet, index + offset), title, content, pinned: false, tags: splitTags(cell(row, map, 'tags')), updatedAt: `${isoDate(cell(row, map, 'updated'), todayISO(), dateFormat)}T12:00:00.000Z` }]
   })
 }
-function parseHabits(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number): Habit[] {
+function parseHabits(rows: Row[], map: HeaderMap, file: string, sheet: string, offset: number, dateFormat: Settings['dateFormat']): Habit[] {
   return rows.flatMap((row, index) => {
     const name = text(cell(row, map, 'title')); if (!name || isBlankRow(row)) return []
-    const date = isoDate(cell(row, map, 'date')); const completed = truthy(cell(row, map, 'completed'))
+    const date = isoDate(cell(row, map, 'date'), todayISO(), dateFormat); const completed = truthy(cell(row, map, 'completed'))
     return [{ id: sourceId('habit', file, sheet, index + offset), name, icon: '◇', done: completed ? { [date]: true } : {}, missed: {}, bestStreak: Math.max(0, Math.round(numberValue(cell(row, map, 'streak')) ?? (completed ? 1 : 0))) }]
   })
 }
@@ -268,21 +338,41 @@ function parseKeyValue(rows: Row[], map: HeaderMap) {
 function pickKey(values: Record<string, Cell>, candidates: string[]) {
   const keys = Object.keys(values); const found = keys.find(key => candidates.map(normalize).includes(key)); return found ? values[found] : undefined
 }
-function parseProfile(rows: Row[], map: HeaderMap): Partial<Profile> {
+function parseProfile(rows: Row[], map: HeaderMap, dateFormat: Settings['dateFormat']): Partial<Profile> {
   const keyed = parseKeyValue(rows, map); const first = rows.find(row => !isBlankRow(row)) ?? []
   const value = (key: AliasKey) => cell(first, map, key) ?? pickKey(keyed, [...aliases[key]])
   const patch: Partial<Profile> = {}
   const name = text(value('title') ?? pickKey(keyed, ['nom', 'name', 'nom complet', 'full name'])); const email = text(value('email')); const city = text(value('city')); const phone = text(value('phone')); const bio = text(value('bio')); const birth = value('birthDate')
-  if (name) patch.name = name; if (email) patch.email = email; if (city) patch.city = city; if (phone) patch.phone = phone; if (bio) patch.bio = bio; if (birth) patch.birthDate = isoDate(birth)
+  if (name) patch.name = name; if (email) patch.email = email; if (city) patch.city = city; if (phone) patch.phone = phone; if (bio) patch.bio = bio; if (birth) patch.birthDate = isoDate(birth, todayISO(), dateFormat)
   return patch
 }
 function parseSettings(rows: Row[], map: HeaderMap): Partial<Settings> {
   const keyed = parseKeyValue(rows, map); const first = rows.find(row => !isBlankRow(row)) ?? []
-  const currency = text(cell(first, map, 'currency') ?? pickKey(keyed, [...aliases.currency])).toUpperCase()
-  const languageRaw = normalize(cell(first, map, 'language') ?? pickKey(keyed, [...aliases.language]))
+  const value = (key: AliasKey) => cell(first, map, key) ?? pickKey(keyed, [...aliases[key]])
+  const currency = text(value('currency')).toUpperCase(); const languageRaw = normalize(value('language'))
+  const dateRaw = text(value('dateFormat')).toUpperCase().replace(/[.\-]/g, '/').replace(/\s/g, '')
+  const decimalRaw = text(value('decimalSeparator')); const timezone = text(value('timezone')); const hourRaw = normalize(value('hourFormat')); const firstDayRaw = normalize(value('firstDay'))
+  const themeRaw = normalize(value('theme')); const densityRaw = normalize(value('density')); const accentRaw = normalize(value('accent')); const frequencyRaw = normalize(value('coachFrequency'))
   const patch: Partial<Settings> = {}
   if (/^[A-Z]{3}$/.test(currency)) patch.currency = currency
   if (languageRaw.startsWith('fr')) patch.language = 'fr'; else if (languageRaw.startsWith('en') || languageRaw.startsWith('ang')) patch.language = 'en'
+  if (/^(DD\/MM\/YYYY|JJ\/MM\/AAAA)$/.test(dateRaw)) patch.dateFormat = 'DD/MM/YYYY'
+  else if (/^(MM\/DD\/YYYY|MM\/JJ\/AAAA)$/.test(dateRaw)) patch.dateFormat = 'MM/DD/YYYY'
+  else if (/^(YYYY\/MM\/DD|AAAA\/MM\/JJ)$/.test(dateRaw)) patch.dateFormat = 'YYYY-MM-DD'
+  if (decimalRaw.includes(',')) patch.decimalSeparator = ','; else if (decimalRaw.includes('.')) patch.decimalSeparator = '.'
+  if (timezone.includes('/')) {
+    try { new Intl.DateTimeFormat('en', { timeZone: timezone }).format(); patch.timezone = timezone } catch { /* Ignore invalid IANA zones. */ }
+  }
+  if (hourRaw.includes('12')) patch.hour12 = true; else if (hourRaw.includes('24')) patch.hour12 = false
+  if (['dimanche', 'sunday', '0'].includes(firstDayRaw)) patch.firstDay = 0; else if (['lundi', 'monday', '1'].includes(firstDayRaw)) patch.firstDay = 1
+  if (['light', 'clair'].includes(themeRaw)) patch.theme = 'light'; else if (['dark', 'sombre'].includes(themeRaw)) patch.theme = 'dark'; else if (['auto', 'systeme', 'system'].includes(themeRaw)) patch.theme = 'auto'
+  if (['compact', 'compacte'].includes(densityRaw)) patch.density = 'compact'; else if (['comfortable', 'confortable'].includes(densityRaw)) patch.density = 'comfortable'; else if (['spacious', 'spacieuse', 'aeree'].includes(densityRaw)) patch.density = 'spacious'
+  if (['smoke', 'sage', 'slate', 'terracotta', 'graphite'].includes(accentRaw)) patch.accent = accentRaw as Settings['accent']
+  if (frequencyRaw.includes('daily') || frequencyRaw.includes('quotid')) patch.coachFrequency = 'daily'; else if (frequencyRaw.includes('week') || frequencyRaw.includes('hebdo')) patch.coachFrequency = 'weekly'; else if (frequencyRaw.includes('never') || frequencyRaw.includes('jamais')) patch.coachFrequency = 'never'
+  const city = text(value('weatherCity')); const coachTime = text(value('coachTime')).slice(0, 5); const pin = text(value('pin')).replace(/\D/g, '').slice(0, 4)
+  if (city) patch.weatherCity = city; if (/^\d{1,2}:\d{2}$/.test(coachTime)) patch.coachTime = coachTime; if (pin.length === 4) patch.pin = pin
+  const booleanKeys = ['hideAmounts', 'notifications', 'budgetAlerts', 'coachEnabled', 'journalLocked', 'animations', 'smoke', 'parallax'] as const
+  booleanKeys.forEach(key => { const raw = value(key); if (text(raw)) patch[key] = truthy(raw) })
   return patch
 }
 
@@ -290,34 +380,48 @@ function combine<T>(current: T[] | undefined, values: T[]) { return current ? [.
 
 export async function parseExcelWorkbook(file: File, language: 'fr' | 'en' = 'fr'): Promise<ExcelImportPayload> {
   const localize = (french: string, english: string) => language === 'en' ? english : french
-  if (!/\.(xlsx|xlsm)$/i.test(file.name)) throw new Error('format')
+  if (!/\.(xlsx|xlsm|xls)$/i.test(file.name)) throw new Error('format')
   if (file.size > 25 * 1024 * 1024) throw new Error('size')
-  const { default: readExcelFile } = await import('read-excel-file/browser')
-  const workbook = await readExcelFile(file) as ParsedSheet[]
+  let workbook: ParsedSheet[]
+  if (/\.xls$/i.test(file.name)) {
+    const XLSX = await import('@e965/xlsx')
+    const binaryWorkbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
+    workbook = binaryWorkbook.SheetNames.map(sheet => ({ sheet, data: XLSX.utils.sheet_to_json(binaryWorkbook.Sheets[sheet], { header: 1, raw: true, defval: null }) as Row[] }))
+  } else {
+    const { default: readExcelFile } = await import('read-excel-file/browser')
+    workbook = await readExcelFile(file) as ParsedSheet[]
+  }
   const data: ExcelImportData = {}; const counts = emptyCounts(); const detectedSheets: ExcelImportPayload['detectedSheets'] = []; const warnings: string[] = []
   let profilePatch: Partial<Profile> | undefined; let settingsPatch: Partial<Settings> | undefined; let rowCount = 0
   for (const worksheet of workbook) {
     const rows = worksheet.data.filter(row => !isBlankRow(row))
     if (!rows.length) continue
+    const headerIndex = findHeaderRow(rows); const { map } = mapHeaders(rows[headerIndex] ?? [])
+    if (classifySheet(worksheet.sheet, map) === 'settings') settingsPatch = { ...settingsPatch, ...parseSettings(rows.slice(headerIndex + 1, headerIndex + 10001), map) }
+  }
+  for (const worksheet of workbook) {
+    const rows = worksheet.data.filter(row => !isBlankRow(row))
+    if (!rows.length) continue
     const headerIndex = findHeaderRow(rows); const { headers, map } = mapHeaders(rows[headerIndex] ?? [])
-    const currencyHint = headers.join(' ').toUpperCase().match(/\b(MAD|EUR|USD|GBP|CAD|CHF|AED|SAR|TND|DZD)\b/)?.[1]
-    if (currencyHint) settingsPatch = { ...settingsPatch, currency: currencyHint }
-    const type = classifySheet(worksheet.sheet, map)
     const body = rows.slice(headerIndex + 1, headerIndex + 10001); rowCount += body.length
+    const currencyHint = detectCurrency(headers, body); const dateHint = detectDateFormat(body, language); const decimalHint = detectDecimalSeparator(body)
+    settingsPatch = { ...settingsPatch, ...(currencyHint && !settingsPatch?.currency ? { currency: currencyHint } : {}), ...(dateHint && !settingsPatch?.dateFormat ? { dateFormat: dateHint } : {}), ...(decimalHint && !settingsPatch?.decimalSeparator ? { decimalSeparator: decimalHint } : {}) }
+    const effectiveDateFormat = settingsPatch.dateFormat ?? dateHint ?? (language === 'en' ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
+    const type = classifySheet(worksheet.sheet, map)
     if (rows.length - headerIndex - 1 > 10000) warnings.push(localize(`${worksheet.sheet} : seules les 10 000 premières lignes ont été importées.`, `${worksheet.sheet}: only the first 10,000 rows were imported.`))
     if (!type) { warnings.push(localize(`${worksheet.sheet} : colonnes non reconnues, feuille ignorée.`, `${worksheet.sheet}: unrecognized columns, sheet skipped.`)); continue }
     let importedRows = 0
-    if (type === 'transactions') { const parsed = parseTransactions(body, map, file.name, worksheet.sheet, headerIndex + 2); data.transactions = combine(data.transactions, parsed); counts.transactions += parsed.length; importedRows = parsed.length }
+    if (type === 'transactions') { const parsed = parseTransactions(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.transactions = combine(data.transactions, parsed); counts.transactions += parsed.length; importedRows = parsed.length }
     if (type === 'budgets') { const parsed = parseBudgets(body, map, file.name, worksheet.sheet, headerIndex + 2); data.budgets = combine(data.budgets, parsed); counts.budgets += parsed.length; importedRows = parsed.length }
-    if (type === 'tasks') { const parsed = parseTasks(body, map, file.name, worksheet.sheet, headerIndex + 2); data.tasks = combine(data.tasks, parsed); counts.tasks += parsed.length; importedRows = parsed.length }
-    if (type === 'goals') { const parsed = parseGoals(body, map, file.name, worksheet.sheet, headerIndex + 2); data.goals = combine(data.goals, parsed); counts.goals += parsed.length; importedRows = parsed.length }
-    if (type === 'savings') { const parsed = parseSavings(body, map, file.name, worksheet.sheet, headerIndex + 2); data.savings = combine(data.savings, parsed); counts.savings += parsed.length; importedRows = parsed.length }
+    if (type === 'tasks') { const parsed = parseTasks(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.tasks = combine(data.tasks, parsed); counts.tasks += parsed.length; importedRows = parsed.length }
+    if (type === 'goals') { const parsed = parseGoals(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.goals = combine(data.goals, parsed); counts.goals += parsed.length; importedRows = parsed.length }
+    if (type === 'savings') { const parsed = parseSavings(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.savings = combine(data.savings, parsed); counts.savings += parsed.length; importedRows = parsed.length }
     if (type === 'investments') { const parsed = parseInvestments(body, map, file.name, worksheet.sheet, headerIndex + 2); data.investments = combine(data.investments, parsed); counts.investments += parsed.length; importedRows = parsed.length }
-    if (type === 'events') { const parsed = parseEvents(body, map, file.name, worksheet.sheet, headerIndex + 2); data.events = combine(data.events, parsed); counts.events += parsed.length; importedRows = parsed.length }
-    if (type === 'notes') { const parsed = parseNotes(body, map, file.name, worksheet.sheet, headerIndex + 2); data.notes = combine(data.notes, parsed); counts.notes += parsed.length; importedRows = parsed.length }
-    if (type === 'habits') { const parsed = parseHabits(body, map, file.name, worksheet.sheet, headerIndex + 2); data.habits = combine(data.habits, parsed); counts.habits += parsed.length; importedRows = parsed.length }
-    if (type === 'profile') { profilePatch = { ...profilePatch, ...parseProfile(body, map) }; importedRows = Object.keys(profilePatch).length }
-    if (type === 'settings') { settingsPatch = { ...settingsPatch, ...parseSettings(body, map) }; importedRows = Object.keys(settingsPatch).length }
+    if (type === 'events') { const parsed = parseEvents(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.events = combine(data.events, parsed); counts.events += parsed.length; importedRows = parsed.length }
+    if (type === 'notes') { const parsed = parseNotes(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.notes = combine(data.notes, parsed); counts.notes += parsed.length; importedRows = parsed.length }
+    if (type === 'habits') { const parsed = parseHabits(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.habits = combine(data.habits, parsed); counts.habits += parsed.length; importedRows = parsed.length }
+    if (type === 'profile') { const parsed = parseProfile(body, map, effectiveDateFormat); profilePatch = { ...profilePatch, ...parsed }; importedRows = Object.keys(parsed).length }
+    if (type === 'settings') { const parsed = parseSettings(body, map); settingsPatch = { ...settingsPatch, ...parsed }; importedRows = Object.keys(parsed).length }
     if (importedRows) detectedSheets.push({ name: worksheet.sheet, type, rows: importedRows })
     else warnings.push(localize(`${worksheet.sheet} : aucune ligne exploitable trouvée.`, `${worksheet.sheet}: no usable rows found.`))
   }

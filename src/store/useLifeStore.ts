@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Budget, CalendarEvent, ChatMessage, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
+import type { Budget, CalendarEvent, ChatMessage, DashboardPresetId, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
+import { getDashboardPreset } from '../data/dashboardPresets'
 import {
   initialBudgets, initialChat, initialEvents, initialGoals, initialHabits, initialIntegrations, initialInvestments, initialJournal,
   initialLayouts, initialMembers, initialNotes, initialProfile, initialSavings, initialSettings, initialTasks, initialTransactions, initialVisible,
@@ -19,6 +20,7 @@ interface LifeStore {
   toasts: ToastData[]
   updateProfile: (patch: Partial<Profile>) => void; updateSettings: (patch: SettingsPatch) => void
   setLayouts: (layouts: StoredLayouts) => void; toggleWidget: (id: string) => void; showAllWidgets: () => void; setEditMode: (value: boolean) => void; resetLayout: () => void
+  moveWidget: (id: string, direction: 'up' | 'down') => void; applyDashboardPreset: (id: DashboardPresetId) => void
   addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void; updateTask: (id: string, patch: Partial<Task>) => void; deleteTask: (id: string) => void; setTaskStatus: (id: string, status: TaskStatus) => void; reorderTasks: (tasks: Task[]) => void
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; deleteNote: (id: string) => void
   toggleHabit: (id: string, date: string) => void
@@ -65,16 +67,22 @@ function recommendedExcelWidgets(payload: ExcelImportPayload) {
   return recommended
 }
 
-function personalizedLayouts(priority: string[]): StoredLayouts {
-  const defaults = initialLayouts.lg
-  const byId = new Map(defaults.map(item => [item.i, item]))
-  const ordered = [...priority, ...defaults.map(item => item.i).filter(id => !priority.includes(id))]
+function personalizedLayouts(
+  priority: string[],
+  sizes: Partial<Record<string, { w: number; h: number }>> = {},
+  sourceLayout: GridItem[] = initialLayouts.lg,
+): StoredLayouts {
+  const byId = new Map([...initialLayouts.lg, ...sourceLayout].map(item => [item.i, item]))
+  const ordered = [...new Set([...priority, ...initialLayouts.lg.map(item => item.i)])]
   let x = 0; let y = 0; let rowHeight = 0
   const lg: GridItem[] = ordered.map(id => {
     const source = byId.get(id) ?? { i: id, x: 0, y: 0, w: 4, h: 4 }
-    if (x + source.w > 12) { y += rowHeight; x = 0; rowHeight = 0 }
-    const item = { ...source, x, y }
-    x += source.w; rowHeight = Math.max(rowHeight, source.h)
+    const requested = sizes[id]
+    const w = Math.min(12, Math.max(source.minW ?? 3, requested?.w ?? source.w))
+    const h = Math.max(source.minH ?? 3, requested?.h ?? source.h)
+    if (x + w > 12) { y += rowHeight; x = 0; rowHeight = 0 }
+    const item = { ...source, w, h, x, y }
+    x += w; rowHeight = Math.max(rowHeight, h)
     return item
   })
   return { lg }
@@ -89,6 +97,26 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   showAllWidgets: () => set({ visibleWidgets: { ...initialVisible } }),
   setEditMode: editMode => set({ editMode }),
   resetLayout: () => { set({ layouts: structuredClone(initialLayouts), visibleWidgets: { ...initialVisible } }); get().pushToast({ title: copy(get(), 'Disposition réinitialisée', 'Layout reset'), tone: 'success' }) },
+  moveWidget: (id, direction) => set(state => {
+    const ordered = [...(state.layouts.lg ?? initialLayouts.lg)].sort((a, b) => a.y - b.y || a.x - b.x).map(item => item.i)
+    const visibleOrder = ordered.filter(widgetId => state.visibleWidgets[widgetId])
+    const index = visibleOrder.indexOf(id)
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+    if (index < 0 || targetIndex < 0 || targetIndex >= visibleOrder.length) return state
+    const targetId = visibleOrder[targetIndex]
+    const first = ordered.indexOf(id); const second = ordered.indexOf(targetId)
+    ;[ordered[first], ordered[second]] = [ordered[second], ordered[first]]
+    return { layouts: personalizedLayouts(ordered, {}, state.layouts.lg) }
+  }),
+  applyDashboardPreset: id => {
+    const preset = getDashboardPreset(id)
+    set(state => ({
+      layouts: personalizedLayouts(preset.priority, preset.sizes, state.layouts.lg),
+      visibleWidgets: Object.fromEntries(Object.keys(initialVisible).map(widgetId => [widgetId, preset.visible.some(item => item === widgetId)])),
+      settings: { ...state.settings, density: preset.density, accent: preset.accent },
+    }))
+    get().pushToast({ title: copy(get(), 'Suggestion appliquée', 'Suggestion applied'), message: preset.name[get().settings.language], tone: 'success' })
+  },
   addTask: task => { set(state => ({ tasks: [{ ...task, id: uid('task'), createdAt: new Date().toISOString() }, ...state.tasks] })); get().pushToast({ title: copy(get(), 'Tâche ajoutée', 'Task added'), tone: 'success' }) },
   updateTask: (id, patch) => set(state => ({ tasks: state.tasks.map(task => task.id === id ? { ...task, ...patch } : task) })),
   deleteTask: id => set(state => ({ tasks: state.tasks.filter(task => task.id !== id) })),
@@ -199,4 +227,8 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,
     editMode: state.editMode, chat: state.chat, unread: state.unread, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey, lastExcelImport: state.lastExcelImport,
   }),
+  merge: (persisted, current) => {
+    const saved = persisted as Partial<LifeStore>
+    return { ...current, ...saved, settings: { ...current.settings, ...saved.settings } }
+  },
 }))

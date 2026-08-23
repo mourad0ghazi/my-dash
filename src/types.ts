@@ -1,6 +1,7 @@
 export type PageId = 'dashboard' | 'finances' | 'personal' | 'features' | 'settings'
 export type ThemeMode = 'light' | 'dark' | 'auto'
 export type Density = 'compact' | 'comfortable' | 'spacious'
+export type DashboardPresetId = 'essential' | 'finance' | 'productivity' | 'wellbeing'
 export type Accent = 'smoke' | 'sage' | 'slate' | 'terracotta' | 'graphite'
 export type TaskStatus = 'todo' | 'doing' | 'done'
 export type Priority = 'low' | 'medium' | 'high' | 'urgent'

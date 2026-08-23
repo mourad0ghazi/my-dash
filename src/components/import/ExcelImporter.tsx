@@ -27,7 +27,7 @@ export function ExcelImporter({ compact = false }: { compact?: boolean }) {
     } catch (error) {
       const reason = error instanceof Error ? error.message : ''
       const message = reason === 'format'
-        ? l('Utilisez un classeur Excel au format .xlsx ou .xlsm.', 'Use an Excel workbook in .xlsx or .xlsm format.')
+        ? l('Utilisez un classeur Excel au format .xlsx, .xlsm ou .xls.', 'Use an Excel workbook in .xlsx, .xlsm, or .xls format.')
         : reason === 'size'
           ? l('Le fichier dépasse la limite locale de 25 Mo.', 'The file exceeds the 25 MB local limit.')
           : reason === 'empty'
@@ -45,7 +45,7 @@ export function ExcelImporter({ compact = false }: { compact?: boolean }) {
   }
   const counts = result ? Object.entries(result.counts).filter(([, count]) => count > 0) as [keyof typeof result.counts, number][] : []
   return <>
-    <input ref={inputRef} hidden type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" onChange={event => readFile(event.target.files?.[0])} />
+    <input ref={inputRef} hidden type="file" accept=".xlsx,.xlsm,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12,application/vnd.ms-excel" onChange={event => readFile(event.target.files?.[0])} />
     <Button variant={compact ? 'secondary' : 'primary'} size={compact ? 'sm' : 'md'} onClick={chooseFile} disabled={parsing} className="excel-import-button">
       {parsing ? <LoaderCircle className="spin" size={15} /> : <FileSpreadsheet size={15} />} {parsing ? l('Analyse…', 'Analyzing…') : l('Importer Excel', 'Import Excel')}
     </Button>
@@ -55,6 +55,7 @@ export function ExcelImporter({ compact = false }: { compact?: boolean }) {
         <section className="excel-preview-section"><header><div><small>01</small><span><strong>{l('Données détectées', 'Detected data')}</strong><p>{l('LifeOS a reconnu automatiquement la structure du classeur.', 'LifeOS automatically recognized the workbook structure.')}</p></span></div></header>
           <div className="excel-count-grid">{counts.map(([key, count]) => <article key={key}><FileSpreadsheet size={16} /><span><strong>{count}</strong><small>{en ? entityLabels[key][1] : entityLabels[key][0]}</small></span></article>)}{result.detectedSheets.filter(sheet => sheet.type === 'profile' || sheet.type === 'settings').map(sheet => <article key={sheet.name}><Sparkles size={16} /><span><strong>{sheet.rows}</strong><small>{en ? sheetLabels[sheet.type][1] : sheetLabels[sheet.type][0]}</small></span></article>)}</div>
           <div className="excel-sheet-list">{result.detectedSheets.map(sheet => <span key={`${sheet.name}-${sheet.type}`}><i />{sheet.name}<em>{en ? sheetLabels[sheet.type][1] : sheetLabels[sheet.type][0]} · {sheet.rows}</em></span>)}</div>
+          {result.settingsPatch && Object.keys(result.settingsPatch).length > 0 && <div className="excel-detected-formats"><strong>{l('Formats qui seront appliqués', 'Formats that will be applied')}</strong><div>{result.settingsPatch.currency && <Badge tone="neutral">{l('Devise', 'Currency')} · {result.settingsPatch.currency}</Badge>}{result.settingsPatch.dateFormat && <Badge tone="neutral">{l('Date', 'Date')} · {result.settingsPatch.dateFormat}</Badge>}{result.settingsPatch.decimalSeparator && <Badge tone="neutral">{l('Décimales', 'Decimals')} · 1{result.settingsPatch.decimalSeparator}25</Badge>}{result.settingsPatch.hour12 !== undefined && <Badge tone="neutral">{l('Heure', 'Time')} · {result.settingsPatch.hour12 ? '12 h' : '24 h'}</Badge>}</div></div>}
         </section>
         <section className="excel-preview-section"><header><div><small>02</small><span><strong>{l('Méthode d’import', 'Import method')}</strong><p>{l('Choisissez comment intégrer les lignes reconnues.', 'Choose how to integrate the recognized rows.')}</p></span></div></header>
           <div className="excel-mode-grid"><button className={mode === 'merge' ? 'active' : ''} onClick={() => setMode('merge')}><span className="excel-radio">{mode === 'merge' && <i />}</span><div><strong>{l('Fusionner intelligemment', 'Smart merge')}</strong><p>{l('Ajoute les nouvelles lignes et évite les doublons évidents. Recommandé.', 'Adds new rows and avoids obvious duplicates. Recommended.')}</p></div><Badge tone="success">{l('Recommandé', 'Recommended')}</Badge></button><button className={mode === 'replace' ? 'active' : ''} onClick={() => setMode('replace')}><span className="excel-radio">{mode === 'replace' && <i />}</span><div><strong>{l('Remplacer les données correspondantes', 'Replace matching data')}</strong><p>{l('Remplace seulement les catégories présentes dans ce fichier.', 'Replaces only the categories present in this file.')}</p></div></button></div>
