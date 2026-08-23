@@ -96,7 +96,7 @@ export function FinanceSettingsPage() {
     try {
       const permission = await Notification.requestPermission()
       updateSettings({ notifications: permission === 'granted' })
-      if (permission === 'granted') new Notification('LifeOS', { body: l('Les rappels locaux sont activés sur cet appareil.', 'Local reminders are enabled on this device.'), icon: '/assets/logo.svg' })
+      if (permission === 'granted') new Notification('LifeOS', { body: l('Les rappels locaux sont activés sur cet appareil.', 'Local reminders are enabled on this device.'), icon: 'assets/logo.svg' })
       else pushToast({ title: l('Permission non accordée', 'Permission not granted'), message: l('Vous pourrez la modifier dans les réglages du navigateur.', 'You can change it in your browser settings.'), tone: 'warning' })
     } catch { pushToast({ title: l('Impossible d’activer les notifications ici', 'Notifications cannot be enabled here'), tone: 'warning' }) }
   }
