@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Budget, CalendarEvent, ChatMessage, Goal, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
+import type { Budget, CalendarEvent, ChatMessage, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
 import {
   initialBudgets, initialChat, initialEvents, initialGoals, initialHabits, initialIntegrations, initialInvestments, initialJournal,
   initialLayouts, initialMembers, initialNotes, initialProfile, initialSavings, initialSettings, initialTasks, initialTransactions, initialVisible,
@@ -15,6 +15,7 @@ interface LifeStore {
   layouts: StoredLayouts; visibleWidgets: Record<string, boolean>; editMode: boolean
   chat: ChatMessage[]; chatOpen: boolean; chatTyping: boolean; unread: number
   members: HouseholdMember[]; integrations: Integration[]; bankConnected: boolean; apiKey: string
+  lastExcelImport?: ExcelImportRecord
   toasts: ToastData[]
   updateProfile: (patch: Partial<Profile>) => void; updateSettings: (patch: SettingsPatch) => void
   setLayouts: (layouts: StoredLayouts) => void; toggleWidget: (id: string) => void; showAllWidgets: () => void; setEditMode: (value: boolean) => void; resetLayout: () => void
@@ -28,6 +29,7 @@ interface LifeStore {
   contributeSavings: (id: string, amount: number) => void
   setChatOpen: (value: boolean) => void; setChatTyping: (value: boolean) => void; pushChat: (message: Omit<ChatMessage, 'id' | 'createdAt'>) => void; clearChat: () => void; setUnread: (value: number) => void
   addMember: (name: string, role: string) => void; toggleIntegration: (id: string) => void; connectBank: () => void; generateApiKey: () => void
+  applyExcelImport: (payload: ExcelImportPayload, mode: ExcelImportMode, customizeDashboard: boolean) => void
   pushToast: (toast: Omit<ToastData, 'id'>) => void; removeToast: (id: string) => void
   resetAll: () => void
 }
@@ -38,8 +40,45 @@ const freshState = () => ({
   profile: { ...initialProfile }, settings: { ...initialSettings }, tasks: [...initialTasks], notes: [...initialNotes], habits: [...initialHabits], journal: [...initialJournal], goals: [...initialGoals], events: [...initialEvents],
   transactions: [...initialTransactions], budgets: [...initialBudgets], savings: [...initialSavings], investments: [...initialInvestments],
   layouts: structuredClone(initialLayouts), visibleWidgets: { ...initialVisible }, editMode: false,
-  chat: [...initialChat], chatOpen: false, chatTyping: false, unread: 0, members: [...initialMembers], integrations: [...initialIntegrations], bankConnected: false, apiKey: '', toasts: [],
+  chat: [...initialChat], chatOpen: false, chatTyping: false, unread: 0, members: [...initialMembers], integrations: [...initialIntegrations], bankConnected: false, apiKey: '', lastExcelImport: undefined, toasts: [],
 })
+
+function mergeImported<T>(existing: T[], incoming: T[] | undefined, mode: ExcelImportMode, key: (item: T) => string): T[] {
+  if (!incoming?.length) return existing
+  if (mode === 'replace') return incoming
+  const incomingKeys = new Set(incoming.map(key))
+  return [...incoming, ...existing.filter(item => !incomingKeys.has(key(item)))]
+}
+
+function recommendedExcelWidgets(payload: ExcelImportPayload) {
+  const recommended: string[] = []
+  const add = (...ids: string[]) => ids.forEach(id => { if (!recommended.includes(id)) recommended.push(id) })
+  if (payload.data.transactions?.length) add('finance', 'expenses', 'transactions')
+  if (payload.data.budgets?.length) add('budget')
+  if (payload.data.savings?.length) add('savings')
+  if (payload.data.investments?.length) add('investments')
+  if (payload.data.tasks?.length) add('tasks')
+  if (payload.data.events?.length) add('calendar')
+  if (payload.data.goals?.length) add('goals')
+  if (payload.data.habits?.length) add('habits')
+  if (payload.data.notes?.length) add('notes')
+  return recommended
+}
+
+function personalizedLayouts(priority: string[]): StoredLayouts {
+  const defaults = initialLayouts.lg
+  const byId = new Map(defaults.map(item => [item.i, item]))
+  const ordered = [...priority, ...defaults.map(item => item.i).filter(id => !priority.includes(id))]
+  let x = 0; let y = 0; let rowHeight = 0
+  const lg: GridItem[] = ordered.map(id => {
+    const source = byId.get(id) ?? { i: id, x: 0, y: 0, w: 4, h: 4 }
+    if (x + source.w > 12) { y += rowHeight; x = 0; rowHeight = 0 }
+    const item = { ...source, x, y }
+    x += source.w; rowHeight = Math.max(rowHeight, source.h)
+    return item
+  })
+  return { lg }
+}
 
 export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   ...freshState(),
@@ -110,6 +149,46 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   toggleIntegration: id => set(state => ({ integrations: state.integrations.map(item => item.id === id ? { ...item, enabled: !item.enabled } : item) })),
   connectBank: () => { set(state => ({ bankConnected: !state.bankConnected })); get().pushToast({ title: get().bankConnected ? copy(get(), 'Compte démo connecté', 'Demo account connected') : copy(get(), 'Compte déconnecté', 'Account disconnected'), tone: 'success' }) },
   generateApiKey: () => { const key = `lifeos_${crypto.randomUUID().replaceAll('-', '')}`; set({ apiKey: key }); get().pushToast({ title: copy(get(), 'Clé API locale générée', 'Local API key generated'), tone: 'success' }) },
+  applyExcelImport: (payload, mode, customizeDashboard) => {
+    set(state => {
+      const transactions = mergeImported(state.transactions, payload.data.transactions, mode, item => `${item.date}|${item.type}|${item.amount}|${item.title.toLocaleLowerCase()}`)
+      let budgets = mergeImported(state.budgets, payload.data.budgets, mode, item => item.category.toLocaleLowerCase())
+      if (payload.data.transactions?.length) {
+        const now = new Date()
+        const spentByCategory = transactions.reduce<Record<string, number>>((totals, transaction) => {
+          const date = new Date(transaction.date)
+          if (transaction.type !== 'expense' || date.getMonth() !== now.getMonth() || date.getFullYear() !== now.getFullYear()) return totals
+          const category = transaction.category.trim().toLocaleLowerCase()
+          totals[category] = (totals[category] ?? 0) + transaction.amount
+          return totals
+        }, {})
+        budgets = budgets.map(budget => ({ ...budget, spent: spentByCategory[budget.category.trim().toLocaleLowerCase()] ?? 0 }))
+      }
+      const priority = recommendedExcelWidgets(payload)
+      const visibleWidgets = customizeDashboard && priority.length
+        ? Object.fromEntries(Object.keys(initialVisible).map(id => [id, id === 'clock' || priority.includes(id)]))
+        : state.visibleWidgets
+      const record: ExcelImportRecord = { fileName: payload.fileName, importedAt: payload.importedAt, sheetCount: payload.sheetCount, rowCount: payload.rowCount, counts: payload.counts }
+      return {
+        profile: payload.profilePatch ? { ...state.profile, ...payload.profilePatch } : state.profile,
+        settings: payload.settingsPatch || payload.profilePatch?.city ? { ...state.settings, ...(payload.profilePatch?.city ? { weatherCity: payload.profilePatch.city } : {}), ...payload.settingsPatch } : state.settings,
+        transactions,
+        budgets,
+        tasks: mergeImported(state.tasks, payload.data.tasks, mode, item => `${item.title.toLocaleLowerCase()}|${item.dueDate}`),
+        goals: mergeImported(state.goals, payload.data.goals, mode, item => item.title.toLocaleLowerCase()),
+        savings: mergeImported(state.savings, payload.data.savings, mode, item => item.title.toLocaleLowerCase()),
+        investments: mergeImported(state.investments, payload.data.investments, mode, item => item.symbol.toLocaleLowerCase()),
+        events: mergeImported(state.events, payload.data.events, mode, item => `${item.title.toLocaleLowerCase()}|${item.date}|${item.time}`),
+        notes: mergeImported(state.notes, payload.data.notes, mode, item => item.title.toLocaleLowerCase()),
+        habits: mergeImported(state.habits, payload.data.habits, mode, item => item.name.toLocaleLowerCase()),
+        visibleWidgets,
+        layouts: customizeDashboard && priority.length ? personalizedLayouts([...priority, 'clock']) : state.layouts,
+        lastExcelImport: record,
+      }
+    })
+    const total = payload.detectedSheets.reduce((sum, sheet) => sum + sheet.rows, 0)
+    get().pushToast({ title: copy(get(), 'Dashboard personnalisé depuis Excel', 'Dashboard personalized from Excel'), message: copy(get(), `${total} éléments importés depuis ${payload.fileName}`, `${total} items imported from ${payload.fileName}`), tone: 'success' })
+  },
   pushToast: toast => { const id = uid('toast'); set(state => ({ toasts: [...state.toasts, { ...toast, id }] })); window.setTimeout(() => get().removeToast(id), 3800) },
   removeToast: id => set(state => ({ toasts: state.toasts.filter(toast => toast.id !== id) })),
   resetAll: () => set(freshState()),
@@ -118,6 +197,6 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   partialize: state => ({
     profile: state.profile, settings: state.settings, tasks: state.tasks, notes: state.notes, habits: state.habits, journal: state.journal, goals: state.goals, events: state.events,
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,
-    editMode: state.editMode, chat: state.chat, unread: state.unread, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey,
+    editMode: state.editMode, chat: state.chat, unread: state.unread, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey, lastExcelImport: state.lastExcelImport,
   }),
 }))

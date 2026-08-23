@@ -36,6 +36,9 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - Mode coach
 
 ### Personnalisation et données
+- Import de classeurs Excel `.xlsx` / `.xlsm` avec détection automatique des feuilles et des colonnes
+- Prévisualisation, fusion intelligente ou remplacement ciblé des données reconnues
+- Personnalisation automatique des widgets et de leur ordre selon le contenu du classeur
 - Thèmes clair, sombre et système
 - Choix d’accent, densité, animations, fumée et parallaxe
 - Interface principale bilingue français/anglais
@@ -55,6 +58,7 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - react-grid-layout
 - Lucide React
 - date-fns
+- read-excel-file (lecture locale des classeurs `.xlsx`)
 - clsx et tailwind-merge
 
 ## Démarrage
@@ -79,7 +83,7 @@ Le build optimisé est généré dans `dist/` avec des chunks séparés pour Rea
 
 LifeOS démarre avec un jeu de données réaliste afin que tous les écrans soient immédiatement utilisables. Les données utilisateur restent dans le stockage local du navigateur. La page Paramètres permet d’exporter ou restaurer une sauvegarde JSON, ainsi que d’exporter les transactions en CSV.
 
-Aucun fichier Excel ou CSV source n’étant inclus dans ce dépôt, aucune donnée externe n’est importée automatiquement au premier démarrage.
+Le bouton **Importer Excel**, disponible directement sur le dashboard et dans `Paramètres > Données`, lit les classeurs `.xlsx` et `.xlsm` dans le navigateur. LifeOS reconnaît les feuilles de transactions, budgets, tâches, objectifs, épargne, investissements, événements, notes, habitudes, profil et préférences à partir de noms de colonnes usuels en français ou en anglais. Avant application, un écran récapitule ce qui a été détecté et permet de fusionner ou de remplacer uniquement les catégories concernées. L’option de personnalisation automatique affiche et remonte ensuite les widgets les plus pertinents sans supprimer les autres modules.
 
 ## Vie privée
 

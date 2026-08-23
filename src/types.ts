@@ -65,6 +65,35 @@ export interface Budget { id: string; category: string; planned: number; spent: 
 export interface SavingsGoal { id: string; title: string; current: number; target: number; dueDate: string; icon: string }
 export interface Investment { id: string; name: string; symbol: string; type: string; value: number; change: number }
 
+export type ExcelDataType = 'transactions' | 'budgets' | 'tasks' | 'goals' | 'savings' | 'investments' | 'events' | 'notes' | 'habits' | 'profile' | 'settings'
+export type ExcelImportMode = 'merge' | 'replace'
+export type ExcelImportData = Partial<{
+  transactions: Transaction[]
+  budgets: Budget[]
+  tasks: Task[]
+  goals: Goal[]
+  savings: SavingsGoal[]
+  investments: Investment[]
+  events: CalendarEvent[]
+  notes: Note[]
+  habits: Habit[]
+}>
+export interface ExcelSheetSummary { name: string; type: ExcelDataType; rows: number }
+export interface ExcelImportCounts { transactions: number; budgets: number; tasks: number; goals: number; savings: number; investments: number; events: number; notes: number; habits: number }
+export interface ExcelImportPayload {
+  fileName: string
+  importedAt: string
+  sheetCount: number
+  rowCount: number
+  detectedSheets: ExcelSheetSummary[]
+  counts: ExcelImportCounts
+  warnings: string[]
+  data: ExcelImportData
+  profilePatch?: Partial<Profile>
+  settingsPatch?: Partial<Settings>
+}
+export interface ExcelImportRecord extends Pick<ExcelImportPayload, 'fileName' | 'importedAt' | 'sheetCount' | 'rowCount' | 'counts'> {}
+
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; createdAt: string }
 export interface HouseholdMember { id: string; name: string; role: string; initials: string }
 export interface Integration { id: string; name: string; enabled: boolean }
