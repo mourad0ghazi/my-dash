@@ -5,14 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f7f7f5" />
     <meta name="description" content="LifeOS — votre espace personnel pour organiser votre vie, vos finances et vos objectifs." />
-    <link rel="icon" type="image/svg+xml" href="/my-dash/assets/favicon.svg" />
-    <link rel="manifest" href="/my-dash/manifest.webmanifest" />
+    <script>
+      if (window.location.hostname === 'mourad0ghazi.github.io' && !window.location.pathname.startsWith('/my-dash/docs/')) {
+        window.location.replace(`/my-dash/docs/${window.location.search}${window.location.hash}`)
+      }
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/my-dash/docs/assets/favicon.svg" />
+    <link rel="manifest" href="/my-dash/docs/manifest.webmanifest" />
     <title>LifeOS — Mon dashboard personnel</title>
-    <script type="module" crossorigin src="/my-dash/assets/index-DOIRFG-W.js"></script>
-    <link rel="modulepreload" crossorigin href="/my-dash/assets/react-vendor-Bf3wb2ya.js">
-    <link rel="modulepreload" crossorigin href="/my-dash/assets/dates-DPDjh7Co.js">
-    <link rel="modulepreload" crossorigin href="/my-dash/assets/motion-JId0psOk.js">
-    <link rel="stylesheet" crossorigin href="/my-dash/assets/index--5Ng3DAs.css">
+    <script type="module" crossorigin src="/my-dash/docs/assets/index-vmg-NQFG.js"></script>
+    <link rel="modulepreload" crossorigin href="/my-dash/docs/assets/react-vendor-Bf3wb2ya.js">
+    <link rel="modulepreload" crossorigin href="/my-dash/docs/assets/dates-DPDjh7Co.js">
+    <link rel="modulepreload" crossorigin href="/my-dash/docs/assets/motion-JId0psOk.js">
+    <link rel="stylesheet" crossorigin href="/my-dash/docs/assets/index--5Ng3DAs.css">
   </head>
   <body>
     <div id="root"></div>
