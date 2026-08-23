@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
 import type { Budget, CalendarEvent, ChatMessage, DashboardPresetId, ExcelImportMode, ExcelImportPayload, ExcelImportRecord, Goal, GridItem, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, TaskStatus, ToastData, Transaction } from '../types'
 import { getDashboardPreset } from '../data/dashboardPresets'
 import {
@@ -7,6 +7,7 @@ import {
   initialLayouts, initialMembers, initialNotes, initialProfile, initialSavings, initialSettings, initialTasks, initialTransactions, initialVisible,
 } from '../data/initialData'
 import { uid } from '../utils/formatters'
+import { indexedDbStorage } from '../utils/indexedDbStorage'
 
 type SettingsPatch = Partial<Settings>
 interface LifeStore {
@@ -196,7 +197,7 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
       const visibleWidgets = customizeDashboard && priority.length
         ? Object.fromEntries(Object.keys(initialVisible).map(id => [id, id === 'clock' || priority.includes(id)]))
         : state.visibleWidgets
-      const record: ExcelImportRecord = { fileName: payload.fileName, importedAt: payload.importedAt, sheetCount: payload.sheetCount, rowCount: payload.rowCount, counts: payload.counts }
+      const record: ExcelImportRecord = { fileName: payload.fileName, importedAt: payload.importedAt, sheetCount: payload.sheetCount, rowCount: payload.rowCount, counts: payload.counts, analysis: payload.analysis }
       return {
         profile: payload.profilePatch ? { ...state.profile, ...payload.profilePatch } : state.profile,
         settings: payload.settingsPatch || payload.profilePatch?.city ? { ...state.settings, ...(payload.profilePatch?.city ? { weatherCity: payload.profilePatch.city } : {}), ...payload.settingsPatch } : state.settings,
@@ -222,6 +223,7 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
   resetAll: () => set(freshState()),
 }), {
   name: 'lifeos:v2:state', version: 2,
+  storage: createJSONStorage(() => indexedDbStorage),
   partialize: state => ({
     profile: state.profile, settings: state.settings, tasks: state.tasks, notes: state.notes, habits: state.habits, journal: state.journal, goals: state.goals, events: state.events,
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,

@@ -80,20 +80,41 @@ export type ExcelImportData = Partial<{
   habits: Habit[]
 }>
 export interface ExcelSheetSummary { name: string; type: ExcelDataType; rows: number }
+export interface ExcelSheetReport { name: string; status: 'recognized' | 'ignored' | 'empty'; type?: ExcelDataType; rowsScanned: number; rowsImported: number }
 export interface ExcelImportCounts { transactions: number; budgets: number; tasks: number; goals: number; savings: number; investments: number; events: number; notes: number; habits: number }
+export type ExcelImportStage = 'reading' | 'decoding' | 'indexing' | 'analyzing' | 'finalizing'
+export interface ExcelImportProgress {
+  stage: ExcelImportStage
+  percent: number
+  sheet?: string
+  sheetsProcessed?: number
+  sheetCount?: number
+  rowsProcessed?: number
+  totalRows?: number
+}
+export interface ExcelDeepAnalysis {
+  mode: 'deep'
+  totalRows: number
+  nonEmptyRows: number
+  totalCells: number
+  analyzedSheets: number
+  truncated: false
+}
 export interface ExcelImportPayload {
   fileName: string
   importedAt: string
   sheetCount: number
   rowCount: number
   detectedSheets: ExcelSheetSummary[]
+  sheetReports: ExcelSheetReport[]
   counts: ExcelImportCounts
   warnings: string[]
+  analysis: ExcelDeepAnalysis
   data: ExcelImportData
   profilePatch?: Partial<Profile>
   settingsPatch?: Partial<Settings>
 }
-export interface ExcelImportRecord extends Pick<ExcelImportPayload, 'fileName' | 'importedAt' | 'sheetCount' | 'rowCount' | 'counts'> {}
+export interface ExcelImportRecord extends Pick<ExcelImportPayload, 'fileName' | 'importedAt' | 'sheetCount' | 'rowCount' | 'counts'> { analysis?: ExcelDeepAnalysis }
 
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; createdAt: string }
 export interface HouseholdMember { id: string; name: string; role: string; initials: string }

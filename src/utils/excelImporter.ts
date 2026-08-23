@@ -1,5 +1,5 @@
 import type {
-  Budget, CalendarEvent, ExcelDataType, ExcelImportCounts, ExcelImportData, ExcelImportPayload, Goal, Habit,
+  Budget, CalendarEvent, ExcelDataType, ExcelImportCounts, ExcelImportData, ExcelImportPayload, ExcelImportProgress, Goal, Habit,
   Investment, Note, Priority, Profile, SavingsGoal, Settings, Task, TaskStatus, Transaction, TransactionType,
 } from '../types'
 import { todayISO } from './formatters'
@@ -73,6 +73,7 @@ type AliasKey = keyof typeof aliases
 const normalize = (value: unknown) => String(value ?? '').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[_./\\-]+/g, ' ').replace(/\s+/g, ' ')
 const normalizedAliases = Object.fromEntries(Object.entries(aliases).map(([key, values]) => [key, values.map(normalize)])) as Record<AliasKey, string[]>
 const allAliases = new Set(Object.values(normalizedAliases).flat())
+const searchableAliases = [...allAliases].filter(alias => alias.length >= 5)
 
 function findColumn(headers: string[], key: AliasKey): number {
   const candidates = normalizedAliases[key]
@@ -84,10 +85,10 @@ function findColumn(headers: string[], key: AliasKey): number {
 function findHeaderRow(rows: Row[]): number {
   let bestIndex = 0
   let bestScore = -1
-  rows.slice(0, 12).forEach((row, index) => {
+  rows.forEach((row, index) => {
     const score = row.reduce<number>((total, cell) => {
       const value = normalize(cell)
-      return total + (allAliases.has(value) ? 2 : [...allAliases].some(alias => alias.length >= 5 && value.includes(alias)) ? 1 : 0)
+      return total + (allAliases.has(value) ? 2 : searchableAliases.some(alias => value.includes(alias)) ? 1 : 0)
     }, 0)
     if (score > bestScore) { bestScore = score; bestIndex = index }
   })
@@ -157,7 +158,7 @@ function isoDate(value: unknown, fallback = todayISO(), dateFormat: Settings['da
 
 function detectDateFormat(rows: Row[], language: 'fr' | 'en'): Settings['dateFormat'] | undefined {
   let sawAmbiguous = false
-  for (const value of rows.flat()) {
+  for (const row of rows) for (const value of row) {
     const raw = text(value)
     if (/^\d{4}[/.\-]\d{1,2}[/.\-]\d{1,2}$/.test(raw)) return 'YYYY-MM-DD'
     const match = raw.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-]\d{2,4}$/)
@@ -171,7 +172,7 @@ function detectDateFormat(rows: Row[], language: 'fr' | 'en'): Settings['dateFor
 }
 
 function detectDecimalSeparator(rows: Row[]): ',' | '.' | undefined {
-  for (const value of rows.flat()) {
+  for (const row of rows) for (const value of row) {
     if (typeof value !== 'string') continue
     const raw = value.trim().replace(/[\s\u00a0]/g, '')
     if (/^\d{1,4}[/.\-]\d{1,2}[/.\-]\d{1,4}$/.test(raw)) continue
@@ -376,56 +377,119 @@ function parseSettings(rows: Row[], map: HeaderMap): Partial<Settings> {
   return patch
 }
 
-function combine<T>(current: T[] | undefined, values: T[]) { return current ? [...current, ...values] : values }
+type ExcelProgressHandler = (progress: ExcelImportProgress) => void
 
-export async function parseExcelWorkbook(file: File, language: 'fr' | 'en' = 'fr'): Promise<ExcelImportPayload> {
+type PreparedSheet = ParsedSheet & {
+  headers: string[]
+  map: HeaderMap
+  headerIndex: number
+  body: Row[]
+  rowsScanned: number
+  type?: ExcelDataType
+}
+
+function readWorkbookBuffer(file: File, onProgress?: ExcelProgressHandler): Promise<ArrayBuffer> {
+  if (typeof FileReader === 'undefined') return file.arrayBuffer()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error('read'))
+    reader.onprogress = event => {
+      if (!event.lengthComputable) return
+      onProgress?.({ stage: 'reading', percent: Math.round(2 + event.loaded / event.total * 18) })
+    }
+    reader.onload = () => resolve(reader.result as ArrayBuffer)
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+const yieldToWorker = () => new Promise<void>(resolve => setTimeout(resolve, 0))
+
+export async function parseExcelWorkbook(file: File, language: 'fr' | 'en' = 'fr', onProgress?: ExcelProgressHandler): Promise<ExcelImportPayload> {
   const localize = (french: string, english: string) => language === 'en' ? english : french
   if (!/\.(xlsx|xlsm|xls)$/i.test(file.name)) throw new Error('format')
-  if (file.size > 25 * 1024 * 1024) throw new Error('size')
-  let workbook: ParsedSheet[]
-  if (/\.xls$/i.test(file.name)) {
-    const XLSX = await import('@e965/xlsx')
-    const binaryWorkbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true })
-    workbook = binaryWorkbook.SheetNames.map(sheet => ({ sheet, data: XLSX.utils.sheet_to_json(binaryWorkbook.Sheets[sheet], { header: 1, raw: true, defval: null }) as Row[] }))
-  } else {
-    const { default: readExcelFile } = await import('read-excel-file/browser')
-    workbook = await readExcelFile(file) as ParsedSheet[]
-  }
-  const data: ExcelImportData = {}; const counts = emptyCounts(); const detectedSheets: ExcelImportPayload['detectedSheets'] = []; const warnings: string[] = []
-  let profilePatch: Partial<Profile> | undefined; let settingsPatch: Partial<Settings> | undefined; let rowCount = 0
-  for (const worksheet of workbook) {
+  onProgress?.({ stage: 'reading', percent: 2 })
+  const [XLSX, buffer] = await Promise.all([import('@e965/xlsx'), readWorkbookBuffer(file, onProgress)])
+  onProgress?.({ stage: 'decoding', percent: 22 })
+  const binaryWorkbook = XLSX.read(buffer, { type: 'array', cellDates: true, dense: true })
+  const workbook: ParsedSheet[] = binaryWorkbook.SheetNames.map(sheet => ({
+    sheet,
+    data: XLSX.utils.sheet_to_json(binaryWorkbook.Sheets[sheet], { header: 1, raw: true, defval: null, blankrows: false }) as Row[],
+  }))
+  onProgress?.({ stage: 'indexing', percent: 27, sheetCount: workbook.length })
+
+  let totalRows = 0; let nonEmptyRows = 0; let totalCells = 0
+  const prepared: PreparedSheet[] = workbook.map(worksheet => {
+    totalRows += worksheet.data.length
     const rows = worksheet.data.filter(row => !isBlankRow(row))
-    if (!rows.length) continue
-    const headerIndex = findHeaderRow(rows); const { map } = mapHeaders(rows[headerIndex] ?? [])
-    if (classifySheet(worksheet.sheet, map) === 'settings') settingsPatch = { ...settingsPatch, ...parseSettings(rows.slice(headerIndex + 1, headerIndex + 10001), map) }
+    nonEmptyRows += rows.length
+    totalCells += rows.reduce((sum, row) => sum + row.filter(value => value !== null && value !== undefined && text(value) !== '').length, 0)
+    const headerIndex = rows.length ? findHeaderRow(rows) : 0
+    const { headers, map } = mapHeaders(rows[headerIndex] ?? [])
+    return { ...worksheet, data: [], headers, map, headerIndex, body: rows.slice(headerIndex + 1), rowsScanned: rows.length, type: rows.length ? classifySheet(worksheet.sheet, map) : undefined }
+  })
+  const analyzableRows = prepared.reduce((sum, worksheet) => sum + worksheet.body.length, 0)
+  onProgress?.({ stage: 'indexing', percent: 30, sheetCount: workbook.length, totalRows: analyzableRows })
+
+  const data: ExcelImportData = {}; const counts = emptyCounts(); const detectedSheets: ExcelImportPayload['detectedSheets'] = []; const sheetReports: ExcelImportPayload['sheetReports'] = []; const warnings: string[] = []
+  let profilePatch: Partial<Profile> | undefined; let settingsPatch: Partial<Settings> | undefined; let rowCount = 0; let rowsProcessed = 0
+
+  // Preferences are read first so even ambiguous dates in earlier sheets use the workbook's explicit format.
+  for (const worksheet of prepared) {
+    if (worksheet.type === 'settings') settingsPatch = { ...settingsPatch, ...parseSettings(worksheet.body, worksheet.map) }
   }
-  for (const worksheet of workbook) {
-    const rows = worksheet.data.filter(row => !isBlankRow(row))
-    if (!rows.length) continue
-    const headerIndex = findHeaderRow(rows); const { headers, map } = mapHeaders(rows[headerIndex] ?? [])
-    const body = rows.slice(headerIndex + 1, headerIndex + 10001); rowCount += body.length
+
+  for (let sheetIndex = 0; sheetIndex < prepared.length; sheetIndex += 1) {
+    const worksheet = prepared[sheetIndex]
+    const { body, headers, map, type } = worksheet
+    rowCount += body.length
+    onProgress?.({ stage: 'analyzing', percent: Math.round(30 + rowsProcessed / Math.max(1, analyzableRows) * 65), sheet: worksheet.sheet, sheetsProcessed: sheetIndex, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
+    if (!worksheet.rowsScanned) {
+      sheetReports.push({ name: worksheet.sheet, status: 'empty', rowsScanned: 0, rowsImported: 0 })
+      onProgress?.({ stage: 'analyzing', percent: Math.round(30 + rowsProcessed / Math.max(1, analyzableRows) * 65), sheet: worksheet.sheet, sheetsProcessed: sheetIndex + 1, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
+      continue
+    }
     const currencyHint = detectCurrency(headers, body); const dateHint = detectDateFormat(body, language); const decimalHint = detectDecimalSeparator(body)
     settingsPatch = { ...settingsPatch, ...(currencyHint && !settingsPatch?.currency ? { currency: currencyHint } : {}), ...(dateHint && !settingsPatch?.dateFormat ? { dateFormat: dateHint } : {}), ...(decimalHint && !settingsPatch?.decimalSeparator ? { decimalSeparator: decimalHint } : {}) }
     const effectiveDateFormat = settingsPatch.dateFormat ?? dateHint ?? (language === 'en' ? 'MM/DD/YYYY' : 'DD/MM/YYYY')
-    const type = classifySheet(worksheet.sheet, map)
-    if (rows.length - headerIndex - 1 > 10000) warnings.push(localize(`${worksheet.sheet} : seules les 10 000 premières lignes ont été importées.`, `${worksheet.sheet}: only the first 10,000 rows were imported.`))
-    if (!type) { warnings.push(localize(`${worksheet.sheet} : colonnes non reconnues, feuille ignorée.`, `${worksheet.sheet}: unrecognized columns, sheet skipped.`)); continue }
+    if (!type) {
+      rowsProcessed += body.length
+      sheetReports.push({ name: worksheet.sheet, status: 'ignored', rowsScanned: worksheet.rowsScanned, rowsImported: 0 })
+      warnings.push(localize(`${worksheet.sheet} : colonnes non reconnues après analyse complète, feuille non importée.`, `${worksheet.sheet}: columns unrecognized after full analysis; sheet not imported.`))
+      continue
+    }
+
     let importedRows = 0
-    if (type === 'transactions') { const parsed = parseTransactions(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.transactions = combine(data.transactions, parsed); counts.transactions += parsed.length; importedRows = parsed.length }
-    if (type === 'budgets') { const parsed = parseBudgets(body, map, file.name, worksheet.sheet, headerIndex + 2); data.budgets = combine(data.budgets, parsed); counts.budgets += parsed.length; importedRows = parsed.length }
-    if (type === 'tasks') { const parsed = parseTasks(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.tasks = combine(data.tasks, parsed); counts.tasks += parsed.length; importedRows = parsed.length }
-    if (type === 'goals') { const parsed = parseGoals(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.goals = combine(data.goals, parsed); counts.goals += parsed.length; importedRows = parsed.length }
-    if (type === 'savings') { const parsed = parseSavings(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.savings = combine(data.savings, parsed); counts.savings += parsed.length; importedRows = parsed.length }
-    if (type === 'investments') { const parsed = parseInvestments(body, map, file.name, worksheet.sheet, headerIndex + 2); data.investments = combine(data.investments, parsed); counts.investments += parsed.length; importedRows = parsed.length }
-    if (type === 'events') { const parsed = parseEvents(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.events = combine(data.events, parsed); counts.events += parsed.length; importedRows = parsed.length }
-    if (type === 'notes') { const parsed = parseNotes(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.notes = combine(data.notes, parsed); counts.notes += parsed.length; importedRows = parsed.length }
-    if (type === 'habits') { const parsed = parseHabits(body, map, file.name, worksheet.sheet, headerIndex + 2, effectiveDateFormat); data.habits = combine(data.habits, parsed); counts.habits += parsed.length; importedRows = parsed.length }
-    if (type === 'profile') { const parsed = parseProfile(body, map, effectiveDateFormat); profilePatch = { ...profilePatch, ...parsed }; importedRows = Object.keys(parsed).length }
-    if (type === 'settings') { const parsed = parseSettings(body, map); settingsPatch = { ...settingsPatch, ...parsed }; importedRows = Object.keys(parsed).length }
+    if (type === 'profile') {
+      const parsed = parseProfile(body, map, effectiveDateFormat); profilePatch = { ...profilePatch, ...parsed }; importedRows = Object.keys(parsed).length; rowsProcessed += body.length
+    } else if (type === 'settings') {
+      const parsed = parseSettings(body, map); settingsPatch = { ...settingsPatch, ...parsed }; importedRows = Object.keys(parsed).length; rowsProcessed += body.length
+    } else {
+      const chunkSize = 5000
+      for (let start = 0; start < body.length; start += chunkSize) {
+        const chunk = body.slice(start, start + chunkSize); const offset = worksheet.headerIndex + 2 + start
+        if (type === 'transactions') { const parsed = parseTransactions(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.transactions ??= []).push(...parsed); counts.transactions += parsed.length; importedRows += parsed.length }
+        if (type === 'budgets') { const parsed = parseBudgets(chunk, map, file.name, worksheet.sheet, offset); (data.budgets ??= []).push(...parsed); counts.budgets += parsed.length; importedRows += parsed.length }
+        if (type === 'tasks') { const parsed = parseTasks(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.tasks ??= []).push(...parsed); counts.tasks += parsed.length; importedRows += parsed.length }
+        if (type === 'goals') { const parsed = parseGoals(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.goals ??= []).push(...parsed); counts.goals += parsed.length; importedRows += parsed.length }
+        if (type === 'savings') { const parsed = parseSavings(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.savings ??= []).push(...parsed); counts.savings += parsed.length; importedRows += parsed.length }
+        if (type === 'investments') { const parsed = parseInvestments(chunk, map, file.name, worksheet.sheet, offset); (data.investments ??= []).push(...parsed); counts.investments += parsed.length; importedRows += parsed.length }
+        if (type === 'events') { const parsed = parseEvents(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.events ??= []).push(...parsed); counts.events += parsed.length; importedRows += parsed.length }
+        if (type === 'notes') { const parsed = parseNotes(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.notes ??= []).push(...parsed); counts.notes += parsed.length; importedRows += parsed.length }
+        if (type === 'habits') { const parsed = parseHabits(chunk, map, file.name, worksheet.sheet, offset, effectiveDateFormat); (data.habits ??= []).push(...parsed); counts.habits += parsed.length; importedRows += parsed.length }
+        rowsProcessed += chunk.length
+        onProgress?.({ stage: 'analyzing', percent: Math.round(30 + rowsProcessed / Math.max(1, analyzableRows) * 65), sheet: worksheet.sheet, sheetsProcessed: sheetIndex, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
+        if (start + chunkSize < body.length) await yieldToWorker()
+      }
+    }
+    sheetReports.push({ name: worksheet.sheet, status: 'recognized', type, rowsScanned: worksheet.rowsScanned, rowsImported: importedRows })
     if (importedRows) detectedSheets.push({ name: worksheet.sheet, type, rows: importedRows })
-    else warnings.push(localize(`${worksheet.sheet} : aucune ligne exploitable trouvée.`, `${worksheet.sheet}: no usable rows found.`))
+    else warnings.push(localize(`${worksheet.sheet} : toutes les lignes ont été lues, mais aucune donnée exploitable n’a été trouvée.`, `${worksheet.sheet}: every row was read, but no usable data was found.`))
+    onProgress?.({ stage: 'analyzing', percent: Math.round(30 + rowsProcessed / Math.max(1, analyzableRows) * 65), sheet: worksheet.sheet, sheetsProcessed: sheetIndex + 1, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
   }
+  onProgress?.({ stage: 'finalizing', percent: 98, sheetsProcessed: prepared.length, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0) + Object.keys(profilePatch ?? {}).length + Object.keys(settingsPatch ?? {}).length
   if (!total) throw new Error('empty')
-  return { fileName: file.name, importedAt: new Date().toISOString(), sheetCount: workbook.length, rowCount, detectedSheets, counts, warnings, data, profilePatch, settingsPatch }
+  const analysis = { mode: 'deep' as const, totalRows, nonEmptyRows, totalCells, analyzedSheets: prepared.length, truncated: false as const }
+  onProgress?.({ stage: 'finalizing', percent: 100, sheetsProcessed: prepared.length, sheetCount: prepared.length, rowsProcessed, totalRows: analyzableRows })
+  return { fileName: file.name, importedAt: new Date().toISOString(), sheetCount: workbook.length, rowCount, detectedSheets, sheetReports, counts, warnings, analysis, data, profilePatch, settingsPatch }
 }

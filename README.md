@@ -10,7 +10,7 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - Quatre suggestions applicables en un clic : Essentiel, Finance, Productivité et Bien-être
 - Recherche globale et actions rapides
 - Navigation desktop, tablette et mobile
-- Préférences et layouts persistés dans `localStorage`
+- Persistance locale robuste dans IndexedDB (avec migration automatique depuis `localStorage`)
 
 ### Vie personnelle
 - Horloge et météo locale
@@ -37,7 +37,9 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - Mode coach
 
 ### Personnalisation et données
-- Import local de classeurs Excel `.xlsx`, `.xlsm` et anciens `.xls`, avec détection automatique des feuilles et colonnes FR/EN
+- Import local exhaustif de classeurs Excel `.xlsx`, `.xlsm` et anciens `.xls`, avec détection automatique des feuilles et colonnes FR/EN
+- Web Worker dédié : toutes les feuilles et lignes utiles sont parcourues sans plafond artificiel, tandis que l’interface reste réactive
+- Progression par étape/feuille et bilan vérifiable (lignes, cellules, feuilles reconnues ou ignorées, zéro troncature)
 - Bouton Excel principal dans Paramètres, prévisualisation, fusion intelligente ou remplacement ciblé des données reconnues
 - Application des transactions, budgets, tâches, objectifs, épargne, investissements, événements, notes, habitudes, profil et préférences détectés
 - Personnalisation automatique des widgets et de leur ordre selon le contenu du classeur
@@ -61,8 +63,7 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - react-grid-layout
 - Lucide React
 - date-fns
-- read-excel-file (lecture locale des classeurs `.xlsx` et `.xlsm`)
-- @e965/xlsx (compatibilité locale avec les anciens classeurs `.xls`)
+- @e965/xlsx (décodage local complet des classeurs `.xlsx`, `.xlsm` et `.xls`)
 - clsx et tailwind-merge
 
 ## Démarrage
@@ -85,9 +86,9 @@ Le build optimisé est généré dans `dist/` avec des chunks séparés pour Rea
 
 ## Données
 
-LifeOS démarre avec un jeu de données réaliste afin que tous les écrans soient immédiatement utilisables. Les données utilisateur restent dans le stockage local du navigateur. La page Paramètres permet d’exporter ou restaurer une sauvegarde JSON, ainsi que d’exporter les transactions en CSV.
+LifeOS démarre avec un jeu de données réaliste afin que tous les écrans soient immédiatement utilisables. Les données utilisateur restent dans IndexedDB sur l’appareil, ce qui évite le faible quota de `localStorage` pour les imports Excel volumineux. La page Paramètres permet d’exporter ou restaurer une sauvegarde JSON, ainsi que d’exporter les transactions en CSV.
 
-Le bouton **Importer Excel**, disponible directement sur le dashboard et dans la section principale `Paramètres > Excel`, lit les classeurs `.xlsx`, `.xlsm` et `.xls` dans le navigateur. LifeOS reconnaît les feuilles de transactions, budgets, tâches, objectifs, épargne, investissements, événements, notes, habitudes, profil et préférences à partir de noms de colonnes usuels en français ou en anglais. Avant application, un écran récapitule les feuilles, lignes, entités et formats détectés, puis permet de fusionner ou de remplacer uniquement les catégories concernées. Les montants, dates, devise, profil et préférences reconnues sont propagés dans l’interface. L’option de personnalisation automatique affiche et remonte ensuite les widgets les plus pertinents sans supprimer les autres modules.
+Le bouton **Importer Excel**, disponible directement sur le dashboard et dans la section principale `Paramètres > Excel`, lit les classeurs `.xlsx`, `.xlsm` et `.xls` dans un Web Worker local. Il n’existe plus de limite arbitraire de 25 Mo ou de 10 000 lignes : le moteur parcourt chaque feuille jusqu’à sa dernière ligne utile, dans la limite de la mémoire réellement disponible dans le navigateur. LifeOS reconnaît les feuilles de transactions, budgets, tâches, objectifs, épargne, investissements, événements, notes, habitudes, profil et préférences à partir de noms de colonnes usuels en français ou en anglais. Pendant l’analyse, la progression indique l’étape, la feuille et le nombre de lignes parcourues. Avant application, un bilan certifie l’absence de troncature et récapitule les feuilles, lignes, cellules, entités et formats détectés, puis permet de fusionner ou de remplacer uniquement les catégories concernées. Les montants, dates, devise, profil et préférences reconnues sont propagés dans l’interface. L’option de personnalisation automatique affiche et remonte ensuite les widgets les plus pertinents sans supprimer les autres modules.
 
 ## Vie privée
 
