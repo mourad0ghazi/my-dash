@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useLifeStore } from '../../store/useLifeStore'
 import type { FinanceProfile } from '../../types'
-import { currency } from '../../utils/formatters'
+import { currency } from '../../utils/numberFormatters'
 import { downloadLifeReport, prepareReportEmail, printLifeReport, type LifeReportData } from '../../utils/reportGenerator'
 import { fadeInUp, staggerContainer } from '../../utils/animations'
 import { Badge, Button, Field, Input, Progress, Select, Textarea, Toggle } from '../ui/primitives'

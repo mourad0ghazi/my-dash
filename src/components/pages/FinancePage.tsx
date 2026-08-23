@@ -3,9 +3,10 @@ import { motion } from 'framer-motion'
 import { BarChart3, CreditCard, Landmark, PiggyBank, ReceiptText, Target, TrendingUp, WalletCards } from 'lucide-react'
 import { useLifeStore } from '../../store/useLifeStore'
 import { translate, type TranslationKey } from '../../i18n/translations'
-import { currency } from '../../utils/formatters'
+import { currency } from '../../utils/numberFormatters'
 import { pageTransition } from '../../utils/animations'
-import { BudgetWidget, ExpenseChartWidget, FinanceSummaryWidget, InvestmentsWidget, LoanCalculator, SavingsSimulator, SavingsWidget, TransactionsWidget } from '../modules/FinanceModules'
+import { BudgetWidget, LoanCalculator, SavingsWidget, TransactionsWidget } from '../modules/FinanceModules'
+import { ExpenseChartWidget, FinanceSummaryWidget, InvestmentsWidget, SavingsSimulator } from '../modules/FinanceChartModules'
 
 type Tab = 'overview' | 'transactions' | 'budget' | 'savings' | 'simulator' | 'investments' | 'loan'
 const tabs: { id: Tab; key: TranslationKey; icon: typeof BarChart3 }[] = [

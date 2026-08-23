@@ -757,3 +757,36 @@ html:not(.smoke-enabled) .hero-smoke { display:none }
 @media (max-width:430px) {
   .diagnostic-cards{grid-template-columns:1fr}.hero-inline-actions .button{width:100%}.finance-profile-copy h1{font-size:32px}.question-panel>footer .button{padding-inline:9px}.report-action-grid>article{padding:18px}
 }
+
+
+/* Lightweight motion keeps the critical path free of the animation runtime. */
+.toggle span { transition:margin-left .22s cubic-bezier(.2,.8,.2,1), transform .22s cubic-bezier(.2,.8,.2,1) }
+.progress span { transition:width .7s cubic-bezier(.2,.8,.2,1) }
+.ring-value { transition:stroke-dashoffset .85s cubic-bezier(.2,.8,.2,1) }
+.widget-in { animation:lifeos-rise .38s both }
+.widget:not(.widget-editing):hover { transform:translateY(-2px) }
+.route-view { animation:lifeos-fade .24s both }
+.hero-in { animation:lifeos-rise .42s both }
+.edit-banner-in { animation:lifeos-slide-down .25s both }
+.modal-overlay-in,.lock-screen-in { animation:lifeos-fade .2s both }
+.modal-in { animation:lifeos-modal-in .26s cubic-bezier(.2,.8,.2,1) both }
+.toast-in { animation:lifeos-toast-in .3s cubic-bezier(.2,.8,.2,1) both }
+.weather-icon-float { animation:float 4s ease-in-out infinite }
+.chat-fab-lite { animation:lifeos-rise .3s both }
+.chart-placeholder { border-radius:14px; background:linear-gradient(90deg,var(--bg-soft),var(--accent-faint),var(--bg-soft)); background-size:200% 100%; animation:dashboard-skeleton 1.25s linear infinite }
+@keyframes lifeos-fade { from{opacity:0} to{opacity:1} }
+@keyframes lifeos-rise { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes lifeos-slide-down { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+@keyframes lifeos-modal-in { from{opacity:0;transform:translateY(10px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes lifeos-toast-in { from{opacity:0;transform:translateX(60px) scale(.97)} to{opacity:1;transform:translateX(0) scale(1)} }
+
+.fatal-screen { min-height:100vh; display:grid; place-items:center; padding:24px; color:var(--text); background:radial-gradient(circle at top,var(--accent-soft),var(--bg)) }
+.fatal-card { width:min(540px,100%); display:flex; flex-direction:column; align-items:center; padding:38px; border:1px solid var(--border); border-radius:24px; background:var(--card-solid); box-shadow:var(--shadow-hover); text-align:center }
+.fatal-card>img { width:54px; height:54px; margin-top:-26px; border-radius:16px }
+.fatal-icon { align-self:flex-end; color:var(--warning) }
+.fatal-card h1 { margin:18px 0 8px; font-family:var(--font-display); font-size:26px; letter-spacing:-.04em }
+.fatal-card p { max-width:430px; margin:0; color:var(--text-muted); font-size:12px; line-height:1.7 }
+.fatal-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:9px; margin:24px 0 14px }
+.fatal-reset { color:var(--danger) }
+.fatal-card>small { color:var(--text-muted); font-size:9px }
+@media (max-width:560px) { .fatal-card{padding:28px 20px}.fatal-actions{width:100%;flex-direction:column}.fatal-actions .button{width:100%} }

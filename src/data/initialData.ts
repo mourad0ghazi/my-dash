@@ -1,5 +1,5 @@
 import type { Budget, CalendarEvent, ChatMessage, FinanceCoachMessage, FinanceProfile, Goal, Habit, HouseholdMember, Integration, Investment, JournalEntry, Note, Profile, SavingsGoal, Settings, StoredLayouts, Task, Transaction } from '../types'
-import { todayISO } from '../utils/formatters'
+import { todayISO } from '../utils/core'
 
 const monthISO = (offset: number, day: number) => {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset); d.setDate(Math.min(day, 28)); return d.toISOString().slice(0, 10)

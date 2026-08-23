@@ -39,6 +39,14 @@ const oneOf = <T extends string>(options: readonly T[]): Guard<T> => (value): va
 const arrayOf = <T>(guard: Guard<T>): Guard<T[]> => (value): value is T[] => Array.isArray(value) && value.every(guard)
 const booleanRecord = (value: unknown): value is Record<string, boolean> => record(value) && Object.values(value).every(boolean)
 const has = (value: Record<string, unknown>, key: string, guard: Guard<unknown>) => guard(value[key])
+const currencyCode: Guard<string> = (value): value is string => {
+  if (!string(value) || !/^[A-Z]{3}$/.test(value)) return false
+  try { new Intl.NumberFormat('fr', { style: 'currency', currency: value }).format(0); return true } catch { return false }
+}
+const timezone: Guard<string> = (value): value is string => {
+  if (!string(value)) return false
+  try { new Intl.DateTimeFormat('fr', { timeZone: value }).format(0); return true } catch { return false }
+}
 
 const profile: Guard<Profile> = (value): value is Profile => record(value)
   && ['name', 'email', 'bio', 'phone', 'birthDate', 'city'].every(key => has(value, key, string))
@@ -49,7 +57,9 @@ const settings: Guard<Settings> = (value): value is Settings => record(value)
   && oneOf(['smoke', 'sage', 'slate', 'terracotta', 'graphite'])(value.accent)
   && oneOf(['compact', 'comfortable', 'spacious'])(value.density)
   && oneOf(['fr', 'en'])(value.language)
-  && ['currency', 'timezone', 'coachTime', 'pin', 'weatherCity', 'notificationEmail'].every(key => has(value, key, string))
+  && currencyCode(value.currency)
+  && timezone(value.timezone)
+  && ['coachTime', 'pin', 'weatherCity', 'notificationEmail'].every(key => has(value, key, string))
   && oneOf(['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'])(value.dateFormat)
   && oneOf([',', '.'])(value.decimalSeparator)
   && (value.firstDay === 0 || value.firstDay === 1)
@@ -81,7 +91,12 @@ const budget: Guard<Budget> = (value): value is Budget => record(value) && strin
 const saving: Guard<SavingsGoal> = (value): value is SavingsGoal => record(value) && string(value.id) && string(value.title) && number(value.current) && number(value.target) && string(value.dueDate) && string(value.icon)
 const investment: Guard<Investment> = (value): value is Investment => record(value) && string(value.id) && string(value.name) && string(value.symbol) && string(value.type) && number(value.value) && number(value.change)
 const member: Guard<HouseholdMember> = (value): value is HouseholdMember => record(value) && string(value.id) && string(value.name) && string(value.role) && string(value.initials)
-const gridItem: Guard<GridItem> = (value): value is GridItem => record(value) && string(value.i) && number(value.x) && number(value.y) && number(value.w) && number(value.h) && (value.minW === undefined || number(value.minW)) && (value.minH === undefined || number(value.minH))
+const positiveInteger = (value: unknown) => number(value) && Number.isInteger(value) && value > 0
+const gridItem: Guard<GridItem> = (value): value is GridItem => record(value) && string(value.i)
+  && number(value.x) && Number.isInteger(value.x) && value.x >= 0
+  && number(value.y) && Number.isInteger(value.y) && value.y >= 0
+  && positiveInteger(value.w) && positiveInteger(value.h)
+  && (value.minW === undefined || positiveInteger(value.minW)) && (value.minH === undefined || positiveInteger(value.minH))
 const layouts: Guard<StoredLayouts> = (value): value is StoredLayouts => record(value) && Object.values(value).every(arrayOf(gridItem))
 const chatMessage: Guard<ChatMessage> = (value): value is ChatMessage => record(value) && string(value.id) && oneOf(['user', 'assistant'])(value.role) && string(value.text) && string(value.createdAt)
 const financeCoachMessage: Guard<FinanceCoachMessage> = (value): value is FinanceCoachMessage => record(value) && string(value.id) && oneOf(['user', 'assistant'])(value.role) && string(value.text) && string(value.createdAt)
@@ -133,5 +148,34 @@ export function createRestorableLifePatch(value: unknown, current: RestorableLif
   if (value.apiKey !== undefined) { if (!string(value.apiKey)) throw new Error('Invalid API key'); patch.apiKey = value.apiKey }
   if (value.lastExcelImport !== undefined) { if (!excelImport(value.lastExcelImport)) throw new Error('Invalid import history'); patch.lastExcelImport = value.lastExcelImport }
   if (!Object.keys(patch).length) throw new Error('No compatible LifeOS data')
+  return patch
+}
+
+
+/**
+ * Leniently restores persisted data one section at a time. Corrupt legacy fields
+ * are ignored instead of being allowed to crash the first render.
+ */
+export function createSafePersistedLifePatch(value: unknown, current: RestorableLifeState): Partial<RestorableLifeState> {
+  if (!record(value)) return {}
+  const patch: Partial<RestorableLifeState> = {}
+  const mergeObject = <K extends 'profile' | 'settings' | 'financeProfile'>(key: K, keys: readonly string[], guard: Guard<RestorableLifeState[K]>) => {
+    if (value[key] === undefined) return
+    try { patch[key] = mergeValidated(value[key], current[key], keys, guard) as Profile & Settings & FinanceProfile } catch { /* Keep defaults for this invalid section. */ }
+  }
+  mergeObject('profile', objectKeys.profile, profile)
+  mergeObject('settings', objectKeys.settings, settings)
+  mergeObject('financeProfile', objectKeys.financeProfile, financeProfile)
+  for (const key of Object.keys(arraySections) as Array<keyof typeof arraySections>) {
+    const section = value[key]
+    if (section !== undefined && arraySections[key](section)) (patch as Record<string, unknown>)[key] = section
+  }
+  if (layouts(value.layouts)) patch.layouts = value.layouts
+  if (booleanRecord(value.visibleWidgets)) patch.visibleWidgets = { ...current.visibleWidgets, ...value.visibleWidgets }
+  if (boolean(value.editMode)) patch.editMode = value.editMode
+  if (number(value.unread) && value.unread >= 0 && Number.isInteger(value.unread)) patch.unread = value.unread
+  if (boolean(value.bankConnected)) patch.bankConnected = value.bankConnected
+  if (string(value.apiKey)) patch.apiKey = value.apiKey
+  if (excelImport(value.lastExcelImport)) patch.lastExcelImport = value.lastExcelImport
   return patch
 }

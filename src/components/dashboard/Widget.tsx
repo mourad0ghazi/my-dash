@@ -1,6 +1,5 @@
 import { type LucideIcon, ArrowDown, ArrowUp, GripVertical, MoreHorizontal, EyeOff } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
-import { motion } from 'framer-motion'
 import { IconButton } from '../ui/primitives'
 import { useLifeStore } from '../../store/useLifeStore'
 
@@ -11,7 +10,7 @@ export function Widget({ id, title, icon: Icon, eyebrow, action, children, class
   const language = useLifeStore(state => state.settings.language)
   const l = (french: string, english: string) => language === 'en' ? english : french
   const [menu, setMenu] = useState(false)
-  return <motion.article id={`widget-${id}`} className={`widget ${editMode ? 'widget-editing' : ''} ${className}`} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .4 }} whileHover={editMode ? undefined : { y: -2 }}>
+  return <article id={`widget-${id}`} className={`widget widget-in ${editMode ? 'widget-editing' : ''} ${className}`}>
     <header className="widget-header drag-handle">
       <div className="widget-title"><GripVertical className="widget-grip" size={16} /><span className="widget-icon"><Icon size={17} /></span><div>{eyebrow && <small>{eyebrow}</small>}<h3>{title}</h3></div></div>
       <div className="widget-actions" onMouseDown={event => event.stopPropagation()}>{action}<IconButton label={`${l('Options de', 'Options for')} ${title}`} onClick={() => setMenu(value => !value)}><MoreHorizontal size={17} /></IconButton>{menu && <div className="widget-menu"><button onClick={() => { toggle(id); setMenu(false) }}><EyeOff size={15} /> {l('Masquer ce module', 'Hide this module')}</button></div>}</div>
@@ -24,5 +23,5 @@ export function Widget({ id, title, icon: Icon, eyebrow, action, children, class
         <button type="button" onClick={() => moveWidget(id, 'down')}><ArrowDown size={15} /> {l('Descendre', 'Move down')}</button>
       </div>
     </>}
-  </motion.article>
+  </article>
 }

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { MessageCircle, Send, Sparkles, Trash2, X } from 'lucide-react'
 import { useLifeStore } from '../../store/useLifeStore'
 import { financialTips, productivityTips, quotes } from '../../data/knowledge'
-import { currency } from '../../utils/formatters'
+import { currency } from '../../utils/numberFormatters'
 import { localizeFinanceCategory, localizeSavingsTitle } from '../../utils/localization'
 import { IconButton } from '../ui/primitives'
 

@@ -171,3 +171,28 @@ export function createIndexedDbStorage<S>(): PersistStorage<S> {
     },
   }
 }
+
+
+/** Clears the local persistence database after a fatal boot/render error. */
+export async function clearIndexedDbStorage() {
+  for (const [, queued] of queuedWrites) {
+    clearTimeout(queued.timer)
+    queued.done.forEach(resolve => resolve())
+  }
+  queuedWrites.clear()
+  try {
+    const database = await databasePromise
+    database?.close()
+  } catch { /* The database may never have opened. */ }
+  databasePromise = undefined
+  try {
+    await new Promise<void>(resolve => {
+      const request = indexedDB.deleteDatabase(DATABASE)
+      const finish = () => resolve()
+      request.onsuccess = finish; request.onerror = finish; request.onblocked = finish
+    })
+  } catch { /* IndexedDB can be blocked by browser privacy settings. */ }
+  try {
+    Object.keys(localStorage).filter(key => key.startsWith('lifeos')).forEach(key => localStorage.removeItem(key))
+  } catch { /* localStorage may be unavailable. */ }
+}

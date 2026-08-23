@@ -15,7 +15,32 @@
     <title>LifeOS — Mon dashboard personnel</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="lifeos-static-boot" role="status" style="min-height:100vh;display:grid;place-items:center;background:#f7f7f5;color:#202520;font:14px system-ui,sans-serif"><div style="display:flex;align-items:center;gap:12px"><img src="%BASE_URL%assets/logo.svg" alt="" width="44" height="44" style="border-radius:13px"><span><strong style="display:block;font-size:20px">LifeOS</strong><small style="color:#727a73">Préparation de votre espace…</small></span></div></div></div>
+    <script>
+      // This guard is intentionally independent from the compiled application: even
+      // a missing entry chunk can never leave a permanently white page.
+      window.setTimeout(function () {
+        var boot = document.getElementById('lifeos-static-boot');
+        if (!boot) return;
+        var english = (navigator.language || '').toLowerCase().startsWith('en');
+        boot.setAttribute('role', 'alert');
+        boot.firstElementChild.innerHTML = '<strong style="display:block;font-size:22px;margin-bottom:8px">' + (english ? 'LifeOS needs a fresh start' : 'LifeOS doit être relancé') + '</strong><span style="display:block;max-width:430px;color:#687068;line-height:1.6">' + (english ? 'A cached application file could not load. You can safely refresh the display without deleting your personal data.' : 'Un fichier de l’application en cache n’a pas pu charger. Vous pouvez réparer l’affichage sans supprimer vos données personnelles.') + '</span><span style="display:flex;flex-wrap:wrap;gap:8px;margin-top:20px"><button id="lifeos-boot-reload" style="padding:10px 16px;border:1px solid #ccd2cc;border-radius:10px;background:white;cursor:pointer">' + (english ? 'Reload' : 'Recharger') + '</button><button id="lifeos-boot-repair" style="padding:10px 16px;border:0;border-radius:10px;color:white;background:#46584b;cursor:pointer">' + (english ? 'Repair display' : 'Réparer l’affichage') + '</button></span>';
+        document.getElementById('lifeos-boot-reload').onclick = function () { window.location.reload(); };
+        document.getElementById('lifeos-boot-repair').onclick = async function () {
+          try {
+            if ('caches' in window) {
+              var keys = await caches.keys();
+              await Promise.all(keys.filter(function (key) { return key.indexOf('lifeos-') === 0; }).map(function (key) { return caches.delete(key); }));
+            }
+            if ('serviceWorker' in navigator) {
+              var registrations = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(registrations.filter(function (item) { return [item.active, item.waiting, item.installing].some(function (worker) { return worker && worker.scriptURL.endsWith('/sw.js'); }); }).map(function (item) { return item.unregister(); }));
+            }
+          } catch (_) { /* A reload remains useful when browser storage is restricted. */ }
+          window.location.reload();
+        };
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

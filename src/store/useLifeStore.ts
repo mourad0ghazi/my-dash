@@ -6,8 +6,9 @@ import {
   initialBudgets, initialChat, initialEvents, initialFinanceCoach, initialFinanceProfile, initialGoals, initialHabits, initialIntegrations, initialInvestments, initialJournal,
   initialLayouts, initialMembers, initialNotes, initialProfile, initialSavings, initialSettings, initialTasks, initialTransactions, initialVisible,
 } from '../data/initialData'
-import { uid } from '../utils/formatters'
+import { uid } from '../utils/core'
 import { createIndexedDbStorage } from '../utils/indexedDbStorage'
+import { createSafePersistedLifePatch } from '../utils/backupValidation'
 
 type SettingsPatch = Partial<Settings>
 interface LifeStore {
@@ -234,8 +235,5 @@ export const useLifeStore = create<LifeStore>()(persist((set, get) => ({
     transactions: state.transactions, budgets: state.budgets, savings: state.savings, investments: state.investments, layouts: state.layouts, visibleWidgets: state.visibleWidgets,
     editMode: state.editMode, chat: state.chat, unread: state.unread, financeProfile: state.financeProfile, financeCoach: state.financeCoach, members: state.members, integrations: state.integrations, bankConnected: state.bankConnected, apiKey: state.apiKey, lastExcelImport: state.lastExcelImport,
   }),
-  merge: (persisted, current) => {
-    const saved = persisted as Partial<LifeStore>
-    return { ...current, ...saved, settings: { ...current.settings, ...saved.settings }, financeProfile: { ...current.financeProfile, ...saved.financeProfile } }
-  },
+  merge: (persisted, current) => ({ ...current, ...createSafePersistedLifePatch(persisted, current) }),
 }))
