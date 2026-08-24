@@ -13,8 +13,11 @@ function useInstallCopy() {
 }
 
 function isNativeAndroidApp() {
-  if (typeof navigator === 'undefined') return false
-  return /Android/i.test(navigator.userAgent) && /;\s*wv\)/i.test(navigator.userAgent)
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+  // The embedded Android runtime serves LifeOS from WebView's reserved HTTPS origin.
+  // Keep the UA fallback for compatible wrappers that preserve the standard `wv` marker.
+  return window.location.hostname === 'appassets.androidplatform.net'
+    || (/Android/i.test(navigator.userAgent) && /;\s*wv\)/i.test(navigator.userAgent))
 }
 
 export function InstallAppPanel() {

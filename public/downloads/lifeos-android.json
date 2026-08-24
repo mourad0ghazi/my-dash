@@ -7,8 +7,8 @@
   "targetSdkVersion": 34,
   "filename": "LifeOS-Android-v2.1.0.apk",
   "mediaType": "application/vnd.android.package-archive",
-  "sizeBytes": 603708,
-  "sha256": "ef651187f152b7a721eb78e9bf51be8b73fd43dbd51596530fed76b3f806a5cd",
+  "sizeBytes": 603738,
+  "sha256": "61e48ba1c9ee8b2d717d41eedbf5a295217344aec5ce506c4099fe0248a4c4ce",
   "signingCertificateSha256": "4600b44100d5502ccf8b06eae8c7a38194b29a10bbcd636876797844938b0bab",
   "signatureSchemes": [
     "v1 (JAR)",
@@ -16,5 +16,5 @@
     "v3"
   ],
   "embeddedWebFiles": 48,
-  "generatedAt": "2026-08-24T00:33:20.119Z"
+  "generatedAt": "2026-08-24T00:48:48.648Z"
 }
