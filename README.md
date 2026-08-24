@@ -48,7 +48,7 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - Formats configurables de devise, séparateur décimal, date, heure et fuseau horaire, avec aperçu en direct
 - Interface principale bilingue français/anglais
 - Notifications configurables
-- Import/export/sauvegarde locale, suppression des données et verrouillage PIN
+- Import/export/sauvegarde locale, suppression des données et protection par code d’accès
 - Catalogue de 10 outils avancés, tous ouverts et gratuits
 - Raccourcis clavier et socle PWA
 
@@ -61,6 +61,8 @@ LifeOS est un dashboard personnel complet pour piloter son quotidien, sa product
 - Stockages séparés entre l’APK et la PWA, avec transfert volontaire par export/import JSON
 
 **Télécharger :** [LifeOS Android v2.1.0](https://mourad0ghazi.github.io/my-dash/docs/downloads/LifeOS-Android-v2.1.0.apk) · [métadonnées et empreintes](https://mourad0ghazi.github.io/my-dash/docs/downloads/lifeos-android.json)
+
+Sur Android, téléchargez l’APK, autorisez si nécessaire l’installation provenant du navigateur, puis ouvrez le fichier. À la première ouverture comme aux suivantes, saisissez `7536`. Android vérifiera la même signature LifeOS lors des futures mises à jour.
 
 ## Stack
 
