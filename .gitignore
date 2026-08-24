@@ -7,3 +7,8 @@ vite.config.d.ts
 *.local
 .env*
 !.env.example
+
+# Local Android release signing material (never commit private keys)
+.android-signing/
+android/*.keystore
+android/*-key.pem

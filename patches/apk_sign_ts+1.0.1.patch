@@ -1,0 +1,27 @@
+diff --git a/node_modules/apk_sign_ts/dist/Crypto.js b/node_modules/apk_sign_ts/dist/Crypto.js
+index 65c30d0..bb3579c 100644
+--- a/node_modules/apk_sign_ts/dist/Crypto.js
++++ b/node_modules/apk_sign_ts/dist/Crypto.js
+@@ -59,7 +59,8 @@ export function base64ToArrayBuffer(base64) {
+ }
+ export function publicKeyDerFromCertificate(certPem) {
+     const cert = forge.pki.certificateFromPem(certPem);
+-    const asn1 = forge.pki.publicKeyToAsn1(cert.publicKey);
++    // APK Signature Scheme v2/v3 requires X.509 SubjectPublicKeyInfo, not a raw PKCS#1 RSA key.
++    const asn1 = forge.pki.publicKeyToSubjectPublicKeyInfo(cert.publicKey);
+     const der = forge.asn1.toDer(asn1);
+     const bytes = der.getBytes();
+     const result = new Uint8Array(bytes.length);
+diff --git a/node_modules/apk_sign_ts/dist/V1Signer.js b/node_modules/apk_sign_ts/dist/V1Signer.js
+index 2f0b113..33635c9 100644
+--- a/node_modules/apk_sign_ts/dist/V1Signer.js
++++ b/node_modules/apk_sign_ts/dist/V1Signer.js
+@@ -92,7 +92,7 @@ export class V1Signer {
+             digestAlgorithm: forge.pki.oids.sha256,
+             authenticatedAttributes: []
+         });
+-        p7.sign();
++        p7.sign({ detached: true });
+         const der = forge.asn1.toDer(p7.toAsn1());
+         const rsa = new Uint8Array(der.length());
+         const bytes = der.getBytes();
